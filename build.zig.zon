@@ -1,0 +1,13 @@
+.{
+    .name = .vfrhi,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.17.1",
+    .fingerprint = 0x60c2cec0f0039ba2,
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}

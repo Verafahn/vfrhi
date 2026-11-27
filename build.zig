@@ -46,7 +46,7 @@ pub fn build(b: *Build) !void {
     }
 
     const test_rhi = b.addTest(.{ .root_module = rhi });
-    
+
     const run_test_rhi = b.addRunArtifact(test_rhi);
     const test_step = b.step("test", "Test module 'vfrhi'.");
     test_step.dependOn(&run_test_rhi.step);
@@ -76,35 +76,6 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
     });
     glfw.mod.linkLibrary(dep_glfw_zig.artifact("glfw"));
-
-    const triangle = b.addExecutable(.{
-        .name = "triangle",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/triangle/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{
-                    .name = "vulkan",
-                    .module = vulkan_module.?,
-                },
-                .{
-                    .name = "glfw",
-                    .module = glfw.mod,
-                },
-                .{
-                    .name = "vfrhi",
-                    .module = rhi,
-                },
-            },
-        }),
-    });
-    b.installArtifact(triangle);
-
-    const run_triangle = b.addRunArtifact(triangle);
-    const run_triangle_step = b.step("run", "Run the triangle example.");
-    run_triangle_step.dependOn(&run_triangle.step);
-    run_triangle.step.dependOn(b.getInstallStep());
 
     const clear = b.addExecutable(.{
         .name = "rhi-clear",

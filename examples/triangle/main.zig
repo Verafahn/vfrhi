@@ -1,6 +1,7 @@
 const std = @import("std");
 const glfw = @import("glfw");
 const vk = @import("vulkan");
+const rhi = @import("vfrhi");
 
 extern fn glfwGetInstanceProcAddress(
     instance: ?vk.Instance,
@@ -22,7 +23,7 @@ const DeviceSelection = struct {
     queue_family_index: u32,
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     if (glfw.glfwInit() != glfw.GLFW_TRUE) return error.GlfwInitFailed;
     defer glfw.glfwTerminate();
 
@@ -41,34 +42,32 @@ pub fn main() !void {
     if (window == null) return error.WindowCreationFailed;
     defer glfw.glfwDestroyWindow(window);
 
-    const allocator = std.heap.page_allocator;
+    const allocator = init.gpa;
 
     var extension_count: u32 = 0;
     const glfw_extensions = glfw.glfwGetRequiredInstanceExtensions(&extension_count);
     if (glfw_extensions == null or extension_count == 0) {
         return error.VulkanExtensionsUnavailable;
     }
-    const required_extensions: [*]const [*:0]const u8 = @ptrCast(glfw_extensions);
 
-    const vkb = vk.BaseWrapper.load(glfwGetInstanceProcAddress);
+    const vulkan = try rhi.Vulkan.init(
+        allocator,
+        glfwGetInstanceProcAddress,
+        .{
+            .application_name = "Hello",
+            .engine_name = "Hello Vulkan",
+            .engine_version = .make(0, 1, 0, 0),
+            .application_version = .make(0, 1, 0, 0),
+            .api_version = .api_1_0,
+            .enabled_extension = @ptrCast(glfw_extensions),
+            .extension_count = extension_count,
+        },
+    );
+    defer vulkan.deinit();
 
-    const app_info = vk.ApplicationInfo{
-        .p_application_name = "Lien Vulkan Smoke Test",
-        .application_version = vk.makeApiVersion(0, 1, 0, 0).toU32(),
-        .p_engine_name = "Lien",
-        .engine_version = vk.makeApiVersion(0, 1, 0, 0).toU32(),
-        .api_version = vk.API_VERSION_1_0.toU32(),
-    };
-
-    const instance = try vkb.createInstance(&.{
-        .p_application_info = &app_info,
-        .enabled_extension_count = extension_count,
-        .pp_enabled_extension_names = required_extensions,
-    }, null);
-
-    const vki_wrapper = vk.InstanceWrapper.load(instance, glfwGetInstanceProcAddress);
-    const vki = vk.InstanceProxy.init(instance, &vki_wrapper);
-    defer vki.destroyInstance(null);
+    const instance = vulkan.instance;
+    const vki = vulkan.vki;
+    const vki_wrapper = vulkan.vki_wrapper;
 
     var surface: vk.SurfaceKHR = undefined;
     if (glfwCreateWindowSurface(instance, window, null, &surface) != .success) {

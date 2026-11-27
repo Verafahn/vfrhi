@@ -7,12 +7,43 @@ pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const use_vulkan = b.option(
+        bool,
+        "vulkan",
+        "Enable vulkan backend.",
+    ) orelse b.isRoot();
+    const backend_options = b.addOptions();
+
+    const vulkan = blk: {
+        if (use_vulkan) {
+            const dep_vulkan_headers = try b.dependencyLazy(
+                "vulkan_headers",
+                .{},
+            );
+            const dep_vulkan = try b.dependencyLazy(
+                "vulkan",
+                .{
+                    .registry = dep_vulkan_headers.path("registry/vk.xml"),
+                },
+            );
+            backend_options.addOption(bool, "vulkan", true);
+            break :blk dep_vulkan.module("vulkan-zig");
+        } else {
+            backend_options.addOption(bool, "vulkan", false);
+            break :blk null;
+        }
+    };
+
     const rhi = b.addModule("rhi", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
     rhi.addImport("rhi", rhi);
+    if (vulkan) |vk_mod| {
+        rhi.addImport("vulkan", vk_mod);
+    }
+    rhi.addOptions("backend", backend_options);
 
     const test_rhi = b.addTest(.{ .root_module = rhi });
     const run_test_rhi = b.addRunArtifact(test_rhi);
@@ -28,13 +59,16 @@ pub fn build(b: *Build) !void {
             "glfw_zig",
             .{},
         );
-        const dep_vulkan_headers = try b.dependencyLazy(
-            "vulkan_headers",
-            .{},
-        );
-        const dep_vulkan = try b.dependencyLazy("vulkan", .{
-            .registry = dep_vulkan_headers.path("registry/vk.xml"),
-        });
+        const vk_mod = vulkan orelse blk: {
+            const dep_vulkan_headers = try b.dependencyLazy(
+                "vulkan_headers",
+                .{},
+            );
+            const dep_vulkan = try b.dependencyLazy("vulkan", .{
+                .registry = dep_vulkan_headers.path("registry/vk.xml"),
+            });
+            break :blk dep_vulkan.module("vulkan-zig");
+        };
         const glfw = Translator.init(dep_translate_c, .{
             .c_source_file = dep_glfw_zig.path("glfw/include/GLFW/glfw3.h"),
             .target = target,
@@ -51,11 +85,15 @@ pub fn build(b: *Build) !void {
                 .imports = &.{
                     .{
                         .name = "vulkan",
-                        .module = dep_vulkan.module("vulkan-zig"),
+                        .module = vk_mod,
                     },
                     .{
                         .name = "glfw",
                         .module = glfw.mod,
+                    },
+                    .{
+                        .name = "vfrhi",
+                        .module = rhi,
                     },
                 },
             }),

@@ -99,7 +99,6 @@ pub fn build(b: *Build) !void {
             },
         }),
     });
-    b.installArtifact(clear);
 
     const run_clear = b.addRunArtifact(clear);
     const run_clear_step = b.step(
@@ -107,5 +106,4 @@ pub fn build(b: *Build) !void {
         "Run the RHI clear example.",
     );
     run_clear_step.dependOn(&run_clear.step);
-    run_clear.step.dependOn(b.getInstallStep());
 }

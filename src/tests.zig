@@ -1,6 +1,7 @@
 const std = @import("std");
 const rhi = @import("rhi");
 const testing = std.testing;
+const test_log_level: std.log.Level = .err;
 
 fn createHeadlessSurface(device: rhi.Device) !rhi.Surface {
     return rhi.Surface.create(device, .{
@@ -9,12 +10,14 @@ fn createHeadlessSurface(device: rhi.Device) !rhi.Surface {
 }
 
 test "test backend starts and stops" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     try backend.validate();
 }
 
 test "surface and swapchain lifecycle" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -62,6 +65,7 @@ test "surface and swapchain lifecycle" {
 }
 
 test "buffer mapping and initial data" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -97,6 +101,7 @@ test "buffer mapping and initial data" {
 }
 
 test "device local buffer cannot be mapped" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -120,6 +125,7 @@ test "device local buffer cannot be mapped" {
 }
 
 test "texture, view, and sampler lifecycle" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -208,6 +214,7 @@ test "texture, view, and sampler lifecycle" {
 }
 
 test "pipeline creation and validation" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -263,6 +270,7 @@ test "pipeline creation and validation" {
 }
 
 test "command buffer draw submission and fence" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -335,6 +343,7 @@ test "command buffer draw submission and fence" {
 }
 
 test "command validation rejects invalid draws" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -356,6 +365,7 @@ test "command validation rejects invalid draws" {
 }
 
 test "copy commands" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -390,6 +400,7 @@ test "copy commands" {
 }
 
 test "query features" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -456,6 +467,7 @@ test "query features" {
 }
 
 test "batch create and destroy" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -481,6 +493,7 @@ test "batch create and destroy" {
 }
 
 test "leak detection" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -496,6 +509,7 @@ test "leak detection" {
 }
 
 test "dependency violation is logged" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -517,6 +531,7 @@ test "dependency violation is logged" {
 }
 
 test "stale handle is rejected" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -534,6 +549,7 @@ test "stale handle is rejected" {
 }
 
 test "fence wait and reset" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -558,6 +574,7 @@ test "fence wait and reset" {
 }
 
 test "invalid descriptor writes are rejected" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -604,6 +621,7 @@ test "invalid descriptor writes are rejected" {
 }
 
 test "texture view depends on its texture" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -625,6 +643,7 @@ test "texture view depends on its texture" {
 }
 
 test "queue selection" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.initWithOptions(
         testing.allocator,
         .{ .queues = &.{
@@ -648,6 +667,7 @@ test "queue selection" {
 }
 
 test "command state validation" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -677,6 +697,7 @@ test "command state validation" {
 }
 
 test "external resource data is accessible" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -715,6 +736,7 @@ test "external resource data is accessible" {
 }
 
 test "generation reuse rejects old handles" {
+    testing.log_level = test_log_level;
     const backend = try rhi.Test.init(testing.allocator);
     defer backend.deinit();
     const device = backend.asDevice();
@@ -751,6 +773,7 @@ test "generation reuse rejects old handles" {
 }
 
 test "vulkan backend compiles when enabled" {
+    testing.log_level = test_log_level;
     if (rhi.vulkan_enabled) {
         const Vulkan = rhi.Vulkan;
         _ = Vulkan.init;

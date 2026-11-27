@@ -46,6 +46,7 @@ pub fn build(b: *Build) !void {
     }
 
     const test_rhi = b.addTest(.{ .root_module = rhi });
+    
     const run_test_rhi = b.addRunArtifact(test_rhi);
     const test_step = b.step("test", "Test module 'vfrhi'.");
     test_step.dependOn(&run_test_rhi.step);

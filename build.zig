@@ -1,38 +1,22 @@
 const std = @import("std");
-const translate_c = @import("translate_c");
-const Translator = translate_c.Translator;
 const Build = std.Build;
 
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const is_root = b.isRoot();
 
+    // Importing vfrhi must not pull in the Vulkan toolchain. The
+    // backend is fetched only when this project is the root package
+    // or when the importer enables the 'vulkan' feature.
     const use_vulkan = b.option(
         bool,
         "vulkan",
         "Enable vulkan backend.",
-    ) orelse b.isRoot();
-    const backend_options = b.addOptions();
+    ) orelse is_root;
 
-    const vulkan = blk: {
-        if (use_vulkan) {
-            const dep_vulkan_headers = try b.dependencyLazy(
-                "vulkan_headers",
-                .{},
-            );
-            const dep_vulkan = try b.dependencyLazy(
-                "vulkan",
-                .{
-                    .registry = dep_vulkan_headers.path("registry/vk.xml"),
-                },
-            );
-            backend_options.addOption(bool, "vulkan", true);
-            break :blk dep_vulkan.module("vulkan-zig");
-        } else {
-            backend_options.addOption(bool, "vulkan", false);
-            break :blk null;
-        }
-    };
+    const backend_options = b.addOptions();
+    backend_options.addOption(bool, "vulkan", use_vulkan);
 
     const rhi = b.addModule("rhi", .{
         .root_source_file = b.path("src/root.zig"),
@@ -40,69 +24,116 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
     });
     rhi.addImport("rhi", rhi);
-    if (vulkan) |vk_mod| {
-        rhi.addImport("vulkan", vk_mod);
-    }
     rhi.addOptions("backend", backend_options);
+
+    var vulkan_module: ?*Build.Module = null;
+    if (use_vulkan) {
+        const dep_vulkan_headers = try b.dependencyLazy(
+            "vulkan_headers",
+            .{},
+        );
+        const dep_vulkan = try b.dependencyLazy(
+            "vulkan",
+            .{
+                .registry = dep_vulkan_headers.path(
+                    "registry/vk.xml",
+                ),
+            },
+        );
+        const module = dep_vulkan.module("vulkan-zig");
+        rhi.addImport("vulkan", module);
+        vulkan_module = module;
+    }
 
     const test_rhi = b.addTest(.{ .root_module = rhi });
     const run_test_rhi = b.addRunArtifact(test_rhi);
     const test_step = b.step("test", "Test module 'vfrhi'.");
     test_step.dependOn(&run_test_rhi.step);
 
-    if (b.isRoot()) {
-        const dep_translate_c = try b.dependencyLazy(
-            "translate_c",
-            .{},
-        );
-        const dep_glfw_zig = try b.dependencyLazy(
-            "glfw_zig",
-            .{},
-        );
-        const vk_mod = vulkan orelse blk: {
-            const dep_vulkan_headers = try b.dependencyLazy(
-                "vulkan_headers",
-                .{},
-            );
-            const dep_vulkan = try b.dependencyLazy("vulkan", .{
-                .registry = dep_vulkan_headers.path("registry/vk.xml"),
-            });
-            break :blk dep_vulkan.module("vulkan-zig");
-        };
-        const glfw = Translator.init(dep_translate_c, .{
-            .c_source_file = dep_glfw_zig.path("glfw/include/GLFW/glfw3.h"),
+    if (!is_root) return;
+
+    // Examples and their window manager dependency are only built
+    // when this project is the root package.
+    if (vulkan_module == null) {
+        return;
+    }
+
+    const translate_c = b.lazyImport(@This(), "translate_c") orelse
+        return;
+    const dep_translate_c = try b.dependencyLazy(
+        "translate_c",
+        .{},
+    );
+    const Translator = translate_c.Translator;
+
+    const dep_glfw_zig = try b.dependencyLazy("glfw_zig", .{});
+    const glfw = Translator.init(dep_translate_c, .{
+        .c_source_file = dep_glfw_zig.path(
+            "glfw/include/GLFW/glfw3.h",
+        ),
+        .target = target,
+        .optimize = optimize,
+    });
+    glfw.mod.linkLibrary(dep_glfw_zig.artifact("glfw"));
+
+    const triangle = b.addExecutable(.{
+        .name = "triangle",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/triangle/main.zig"),
             .target = target,
             .optimize = optimize,
-        });
-        glfw.mod.linkLibrary(dep_glfw_zig.artifact("glfw"));
-
-        const triangle = b.addExecutable(.{
-            .name = "triangle",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("examples/triangle/main.zig"),
-                .target = target,
-                .optimize = optimize,
-                .imports = &.{
-                    .{
-                        .name = "vulkan",
-                        .module = vk_mod,
-                    },
-                    .{
-                        .name = "glfw",
-                        .module = glfw.mod,
-                    },
-                    .{
-                        .name = "vfrhi",
-                        .module = rhi,
-                    },
+            .imports = &.{
+                .{
+                    .name = "vulkan",
+                    .module = vulkan_module.?,
                 },
-            }),
-        });
-        b.installArtifact(triangle);
+                .{
+                    .name = "glfw",
+                    .module = glfw.mod,
+                },
+                .{
+                    .name = "vfrhi",
+                    .module = rhi,
+                },
+            },
+        }),
+    });
+    b.installArtifact(triangle);
 
-        const run_triangle = b.addRunArtifact(triangle);
-        const run_triangle_step = b.step("run", "");
-        run_triangle_step.dependOn(&run_triangle.step);
-        run_triangle.step.dependOn(b.getInstallStep());
-    }
+    const run_triangle = b.addRunArtifact(triangle);
+    const run_triangle_step = b.step("run", "Run the triangle example.");
+    run_triangle_step.dependOn(&run_triangle.step);
+    run_triangle.step.dependOn(b.getInstallStep());
+
+    const clear = b.addExecutable(.{
+        .name = "rhi-clear",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/clear/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{
+                    .name = "vulkan",
+                    .module = vulkan_module.?,
+                },
+                .{
+                    .name = "glfw",
+                    .module = glfw.mod,
+                },
+                .{
+                    .name = "vfrhi",
+                    .module = rhi,
+                },
+            },
+        }),
+    });
+    b.installArtifact(clear);
+
+    const run_clear = b.addRunArtifact(clear);
+    const run_clear_step = b.step(
+        "run-rhi",
+        "Run the RHI clear example.",
+    );
+    run_clear_step.dependOn(&run_clear.step);
+    run_clear.step.dependOn(b.getInstallStep());
 }

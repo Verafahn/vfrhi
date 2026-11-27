@@ -29,15 +29,11 @@ pub const Texture = memory.Texture;
 pub const TextureView = memory.TextureView;
 pub const Sampler = memory.Sampler;
 pub const Shader = pipeline.Shader;
-pub const DescriptorSetLayout = pipeline
-    .DescriptorSetLayout;
-pub const PipelineLayout = pipeline
-    .PipelineLayout;
+pub const DescriptorSetLayout = pipeline.DescriptorSetLayout;
+pub const PipelineLayout = pipeline.PipelineLayout;
 pub const DescriptorSet = pipeline.DescriptorSet;
-pub const GraphicsPipeline = pipeline
-    .GraphicsPipeline;
-pub const ComputePipeline = pipeline
-    .ComputePipeline;
+pub const GraphicsPipeline = pipeline.GraphicsPipeline;
+pub const ComputePipeline = pipeline.ComputePipeline;
 pub const CommandBuffer = @import("resources/CommandBuffer.zig");
 pub const Fence = sync.Fence;
 pub const Semaphore = sync.Semaphore;

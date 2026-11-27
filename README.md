@@ -1,89 +1,104 @@
 # vfrhi
 
-A backend independent **Render Hardware Interface** for Zig.
+A render hardware interface (RHI) for Zig. Write rendering code once and
+run it on Vulkan — or run the exact same code headlessly in tests, with
+no GPU.
 
-vfrhi models explicit graphics APIs such as Vulkan with a deliberately
-small set of virtual tables. Resource kinds, commands, device
-operations, and queries are encoded as tagged unions, so adding a
-resource does not add a virtual function.
+[![CI](https://github.com/Verafahn/vfrhi/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Verafahn/vfrhi/actions/workflows/ci.yml)
+![Zig](https://img.shields.io/badge/zig-0.17.1-f7a41d)
 
-## Design
+## Features
 
-- Two interfaces: `Device` and `Queue`.
-- One `create` / `destroy` pair for every resource, plus batch variants.
-- One `map` / `unmap` pair for host-visible memory.
-- One `record` function for command buffers; commands are a union.
-- One `device_op` union for device level operations.
-- One `query` function for capabilities and properties.
-- Resources are generation protected handles; stale handles are
-  rejected by backends.
-- Backends are externally owned: the RHI never creates or destroys a
-  backend instance.
-- The RHI does not assume a window system. Surfaces are described with
-  native handles supplied by the application.
+- **One API, multiple backends.** The same resources and commands run on
+  the Vulkan backend and on the built-in test backend.
+- **Vulkan 1.3 backend.** Dynamic rendering, graphics and compute
+  pipelines, SPIR-V shaders, and Win32, Xlib, or Wayland surfaces.
+- **Tests without a GPU.** `rhi.Test` catches leaks, incorrect
+  destruction order, stale handles, invalid map/unmap calls, invalid
+  command buffer state, and bad submission parameters. It also exposes
+  buffer and texture bytes so tests can assert on uploaded data.
+- **All the usual resources.** Buffers, textures, texture views,
+  samplers, shader modules, descriptor set layouts, pipeline layouts,
+  descriptor sets, graphics and compute pipelines, command buffers,
+  fences, semaphores, surfaces, and swapchains.
+- **Practical command set.** Dynamic rendering, draws, indexed draws,
+  compute dispatches, buffer and texture copies, pipeline barriers, push
+  constants, viewport, and scissor.
+- **Safe handles.** Destroyed, stale, or wrong-type handles are rejected
+  instead of causing undefined behaviour.
+- **No window framework required.** You pass vfrhi the native window
+  handles; GLFW, SDL, or your own platform layer all work.
+- **Small integration cost.** Importing vfrhi does not fetch the Vulkan
+  toolchain. The backend is pulled in only when you enable it.
 
-## Layout
+## Requirements
 
-| Path | Purpose |
-| --- | --- |
-| `src/root.zig` | Public entry point |
-| `src/Resource.zig` | Handles, tags, descriptions, formats |
-| `src/Device.zig` | Device vtable and device level helpers |
-| `src/Queue.zig` | Queue vtable |
-| `src/Command.zig` | Command union and command payloads |
-| `src/resources/` | Typed resource wrappers |
-| `src/backend/test/` | Headless validation backend |
-| `src/backend/vulkan/` | Vulkan backend |
-| `examples/` | GLFW smoke tests |
+- Zig 0.17.1.
+- For the Vulkan backend: a Vulkan 1.3 device with dynamic rendering.
+  Enable the instance extension for your window system when you create
+  the backend (`VK_KHR_win32_surface`, `VK_KHR_xlib_surface`, or
+  `VK_KHR_wayland_surface`).
 
-## Using vfrhi as a dependency
+## Installation
 
-By default only the RHI and the test backend are built. The Vulkan
-backend and its toolchain are fetched lazily.
+Fetch the package:
 
-```zig
-const vfrhi = b.dependency("vfrhi", .{
-    .target = target,
-    .optimize = optimize,
-});
+```sh
+zig fetch --save git+https://github.com/Verafahn/vfrhi.git
 ```
 
-Enable Vulkan explicitly:
+Then import it in your `build.zig`:
 
 ```zig
 const vfrhi = b.dependency("vfrhi", .{
     .target = target,
     .optimize = optimize,
-    .vulkan = true,
+    .vulkan = true, // omit to skip the Vulkan toolchain
 });
 
 exe.root_module.addImport("vfrhi", vfrhi.module("rhi"));
 ```
 
-When vfrhi is the root project, `zig build` enables Vulkan, fetches all
-dependencies, and builds both examples. Use `-Dvulkan=false` to build
-only the RHI and the test backend.
+Vulkan is off by default when vfrhi is a dependency, so referencing
+`rhi.Vulkan` without `.vulkan = true` is a compile error. When building
+vfrhi itself, Vulkan is enabled by default; pass `-Dvulkan=false` to
+`zig build` to turn it off.
 
-## Minimal setup
+## Quick start
+
+Create a Vulkan backend and borrow a queue from its device:
 
 ```zig
 const rhi = @import("vfrhi");
 
+// A function with the same signature as vkGetInstanceProcAddr,
+// for example glfwGetInstanceProcAddress.
 const backend = try rhi.Vulkan.init(
     gpa,
     loader_fn,
     .{
         .application_name = "my app",
         .api_version = .api_1_3,
-        .enabled_extension = extensions,
-        .extension_count = extension_count,
+        // Enable the surface extension your window system needs.
+        .enabled_extension = instance_extensions,
+        .extension_count = instance_extension_count,
     },
 );
 defer backend.deinit();
 
 const device = backend.asDevice();
 const queue = try device.getQueue(0);
+```
 
+Destroy every RHI resource before `backend.deinit()`. Each resource has
+an explicit `destroy` method, and `device.createBatch` /
+`device.destroyBatch` are available when you want to create or destroy
+several at once.
+
+Create a surface from a native window handle and a swapchain from the
+surface:
+
+```zig
 const surface = try rhi.Surface.create(device, .{
     .native = .{ .win32 = .{
         .hinstance = hinstance,
@@ -96,86 +111,325 @@ const swapchain = try rhi.Swapchain.create(device, .{
     .surface = surface.resource,
     .width = 800,
     .height = 600,
+    .format = .b8g8r8a8_srgb,
+    .present_mode = .fifo,
+    .image_count = 3,
 });
 defer swapchain.destroy();
 ```
 
-Destroy every RHI resource before `backend.deinit()`. The Vulkan
-backend requires Vulkan 1.3 with dynamic rendering.
+`Surface.Description.Native` also accepts `.xlib` and `.wayland` handles.
+The actual swapchain extent and image count are available from
+`swapchain.properties` after creation.
 
-## Buffers and mapping
+## Buffers
+
+Host-visible buffers can be written and read directly. Device-local
+buffers are filled through commands or `initial_data`.
 
 ```zig
-const buffer = try rhi.Buffer.create(device, .{
-    .size = data.len,
-    .memory = .{ .host_visible = true },
+const vertices = [_]f32{
+    -0.5, -0.5, 0.0,
+     0.5, -0.5, 0.0,
+     0.0,  0.5, 0.0,
+};
+
+const vertex_buffer = try rhi.Buffer.create(device, .{
+    .size = std.mem.sliceAsBytes(&vertices).len,
     .usage = .{ .vertex = true },
-    .initial_data = data,
+    .memory = .{ .host_visible = true },
+    .initial_data = std.mem.sliceAsBytes(&vertices),
 });
-defer buffer.destroy();
+defer vertex_buffer.destroy();
 
-try buffer.write(0, new_data);
+// Update part of the buffer later.
+try vertex_buffer.write(0, std.mem.sliceAsBytes(&vertices));
 
-var readback: [16]u8 = undefined;
-try buffer.read(0, &readback);
+// Read it back.
+var readback: [12]f32 = undefined;
+try vertex_buffer.read(0, std.mem.sliceAsBytes(&readback));
 ```
 
-## Commands and submission
+`BufferDescription.memory` supports `device_local`, `host_visible`,
+`host_coherent`, and `host_cached`. Non-host-visible buffers that use
+`initial_data` must enable `usage.transfer_dst`.
+
+## Textures and samplers
+
+Textures take tightly packed or strided pixel data at creation:
 
 ```zig
+const texture = try rhi.Texture.create(device, .{
+    .format = .r8g8b8a8_unorm,
+    .width = 256,
+    .height = 256,
+    .usage = .{ .sampled = true, .transfer_dst = true },
+    .initial_data = .{ .bytes = pixels },
+});
+defer texture.destroy();
+
+const view = try texture.createView(.{});
+defer view.destroy();
+
+const sampler = try rhi.Sampler.create(device, .{
+    .mag_filter = .linear,
+    .min_filter = .linear,
+    .address_u = .clamp_to_edge,
+    .address_v = .clamp_to_edge,
+});
+defer sampler.destroy();
+```
+
+Use `.row_pitch` and `.image_height` in `TextureData` when the source
+rows are padded. Textures also support mip levels, array layers,
+multisampling, 1D/2D/3D types, and every format listed in
+`rhi.types.Format`.
+
+## Pipelines and descriptors
+
+```zig
+const Vertex = extern struct {
+    position: [3]f32,
+};
+
+const vertex = try rhi.Shader.create(device, .{
+    .stage = .vertex,
+    .code = vertex_spirv, // []const u32
+});
+defer vertex.destroy();
+
+const fragment = try rhi.Shader.create(device, .{
+    .stage = .fragment,
+    .code = fragment_spirv,
+});
+defer fragment.destroy();
+
+const set_layout = try rhi.DescriptorSetLayout.create(device, .{
+    .bindings = &.{
+        .{
+            .binding = 0,
+            .kind = .uniform_buffer,
+            .stages = .{ .vertex = true },
+        },
+        .{
+            .binding = 1,
+            .kind = .combined_image_sampler,
+            .stages = .{ .fragment = true },
+        },
+    },
+});
+defer set_layout.destroy();
+
+const pipeline_layout = try rhi.PipelineLayout.create(device, .{
+    .descriptor_sets = &.{set_layout.resource},
+});
+defer pipeline_layout.destroy();
+
+const descriptor_set = try rhi.DescriptorSet.create(device, .{
+    .layout = set_layout.resource,
+});
+defer descriptor_set.destroy();
+
+try descriptor_set.update(&.{
+    .{
+        .binding = 0,
+        .kind = .{ .buffer = .{
+            // A buffer created like vertex_buffer above.
+            .buffer = uniform_buffer.resource,
+            .size = uniform_buffer.size,
+        } },
+    },
+    .{
+        .binding = 1,
+        .kind = .{ .texture = .{
+            .view = view.resource,
+            .sampler = sampler.resource,
+        } },
+    },
+});
+
+const pipeline = try rhi.GraphicsPipeline.create(device, .{
+    .layout = pipeline_layout.resource,
+    .vertex = vertex.resource,
+    .fragment = fragment.resource,
+    .vertex_layout = .{
+        .bindings = &.{.{ .stride = @sizeOf(Vertex) }},
+        .attributes = &.{
+            .{
+                .location = 0,
+                .format = .r32g32b32_float,
+                .offset = 0,
+            },
+        },
+    },
+    .depth = .{ .enable = false, .write = false },
+    .color_formats = &.{.b8g8r8a8_srgb},
+});
+defer pipeline.destroy();
+```
+
+Compute pipelines use the same layouts with a single compute shader via
+`rhi.ComputePipeline.create`.
+
+Shaders are SPIR-V modules. Compile them with `glslangValidator -V` or
+`glslc`, embed the `.spv` bytes with `@embedFile`, and pass the words as
+`[]const u32`.
+
+## Render a frame
+
+```zig
+const images = try swapchain.images(gpa);
+defer gpa.free(images);
+
+const views = try swapchain.views(gpa);
+defer gpa.free(views);
+
+const image_available = try rhi.Semaphore.create(device, .{});
+defer image_available.destroy();
+
+const render_finished = try rhi.Semaphore.create(device, .{});
+defer render_finished.destroy();
+
+const in_flight = try rhi.Fence.create(device, .{ .signaled = true });
+defer in_flight.destroy();
+
 const command_buffer = try rhi.CommandBuffer.create(device, .{});
 defer command_buffer.destroy();
 
+// Once per frame:
+try in_flight.wait(std.math.maxInt(u64));
+try in_flight.reset();
+
+const acquired = try swapchain.acquire(queue, image_available, null);
+const target_image = images[acquired.image_index];
+const target_view = views[acquired.image_index];
+
 try command_buffer.begin();
+try command_buffer.barrier(.{
+    .resource = target_image,
+    .src_stage = .top_of_pipe,
+    .dst_stage = .color_attachment,
+    .dst_access = .{ .color_attachment_write = true },
+    .layout_before = .undefined,
+    .layout_after = .color_attachment,
+});
 try command_buffer.beginRendering(.{
-    .area = .{ .width = 800, .height = 600 },
+    .area = .{ .width = width, .height = height },
     .color_attachments = &.{.{
-        .view = swapchain_view,
+        .view = target_view,
         .load = .clear,
+        .store = .store,
         .clear = .{ .r = 0.05, .g = 0.08, .b = 0.16 },
     }},
 });
+try command_buffer.bindPipeline(.{ .pipeline = pipeline.resource });
+try command_buffer.bindVertexBuffers(.{
+    .buffers = &.{vertex_buffer.resource},
+});
+try command_buffer.draw(.{ .vertex_count = 3 });
 try command_buffer.endRendering();
+try command_buffer.barrier(.{
+    .resource = target_image,
+    .src_stage = .color_attachment,
+    .dst_stage = .bottom_of_pipe,
+    .src_access = .{ .color_attachment_write = true },
+    .layout_before = .color_attachment,
+    .layout_after = .present,
+});
 try command_buffer.end();
 
-try command_buffer.submit(queue, .{});
-try queue.waitIdle();
+try command_buffer.submit(queue, .{
+    .wait_semaphores = &.{image_available.resource},
+    .signal_semaphores = &.{render_finished.resource},
+    .fence = in_flight,
+});
+
+try swapchain.present(.{
+    .queue = queue,
+    .image_index = acquired.image_index,
+    .wait_semaphores = &.{render_finished.resource},
+});
 ```
 
-## Test backend
+`swapchain.images(gpa)` and `swapchain.views(gpa)` return arrays of
+handles that you free with the same allocator. Handle
+`error.SurfaceOutOfDate` by recreating the swapchain.
 
-`rhi.Test` validates call sequences without a GPU:
+Use the submission fence (`in_flight.wait(timeout_ns)`) or
+`queue.waitIdle()` before reading or rewriting resources that the GPU
+may still be using.
+
+## Queries
+
+Ask the device about its capabilities before relying on them:
 
 ```zig
-const backend = try rhi.Test.init(std.testing.allocator);
-defer backend.deinit();
+const name = try device.getDeviceName(gpa);
+defer gpa.free(name);
 
-const device = backend.asDevice();
-// ... create and use resources ...
-try backend.validate();
+const max_texture = try device.getLimit(.max_texture_dimension_2d);
+const queue_props = try device.getQueueProperties(0);
+
+if (try device.supportsFormat(.r8g8b8a8_unorm, .{ .storage = true })) {
+    // The format can be used as a storage image.
+}
 ```
 
-It checks handle generations, resource type mismatches, destruction
-order, leaks, map/unmap state, command buffer state, submission
-parameters, and initial buffer contents.
+`Device.Feature` also exposes the API version, device and driver names,
+device type, memory heaps, and buffer, texture, surface, and swapchain
+properties.
 
-## Building
+## Testing without a GPU
+
+`rhi.Test` implements the same device interface as the Vulkan backend,
+so production resource and command code runs unchanged in tests.
+`validate` fails on leaked resources or validation errors.
+
+```zig
+test "records a draw" {
+    const backend = try rhi.Test.init(std.testing.allocator);
+    defer backend.deinit();
+
+    const device = backend.asDevice();
+
+    // Create and use resources exactly like the Vulkan path.
+
+    try backend.validate();
+}
+```
+
+To assert on uploaded data, use `backend.bufferData(resource)` or
+`backend.textureData(resource)`:
+
+```zig
+const bytes = backend.bufferData(vertex_buffer.resource).?;
+try std.testing.expectEqualSlices(
+    u8,
+    std.mem.sliceAsBytes(&vertices),
+    bytes,
+);
+```
+
+## Building and running
 
 ```sh
-zig build                # RHI, test backend, examples
-zig build test           # headless integration tests
-zig build run-rhi        # RHI clear example, needs a GPU
-zig build run            # raw Vulkan triangle example
+zig build test --summary all    # headless test suite, no GPU needed
+zig build run-rhi               # build and run the clear example
+zig build test -Dvulkan=false   # skip the Vulkan backend and toolchain
 ```
 
-Run the project tests with:
+A complete frame loop with swapchain presentation lives in
+`examples/clear/main.zig`. It creates a Win32 surface on Windows; on
+other platforms, supply the surface description for your native window
+system.
 
-```sh
-zig build test --summary all
-```
+## Limitations
 
-## Documentation
-
-Public declarations use the `zig-api-docs` comment template. See
-`AGENT.md` for architecture rules, naming conventions, and the
-checklist for adding resources or commands.
+- Only the Vulkan backend is implemented so far. The test backend
+  validates calls but does not rasterize anything.
+- The Vulkan backend requires Vulkan 1.3 and dynamic rendering, and it
+  does not provide a headless surface. Use the test backend for GPU-free
+  runs.
+- The command set does not yet include indirect draws, timestamp
+  queries, or advanced features such as ray tracing and mesh shaders.
+- The project is pre-1.0 and the API may change between releases.

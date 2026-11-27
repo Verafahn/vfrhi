@@ -14,6 +14,7 @@ const windows = if (builtin.os.tag == .windows) struct {
     extern fn GetModuleHandleW(name: ?[*:0]const u16) ?*anyopaque;
 } else struct {};
 
+// const max_frames = std.math.maxInt(u32);
 const max_frames = 240;
 
 pub fn main(init: std.process.Init) !void {

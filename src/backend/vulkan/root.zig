@@ -57,7 +57,23 @@ instance: vk.Instance,
 vki_wrapper: vk.InstanceWrapper,
 
 pub fn init(allocator: Allocator, loader_fn: anytype, info: VulkanDesc) !*Vulkan {
-    log.debug("{f}", .{info.api_version});
+    log.debug("Creating vulkan backend", .{});
+    if (info.application_name) |name| {
+        log.debug("   application_name: {s}", .{name});
+    }
+    log.debug("application_version: {f}", .{info.application_version});
+    if (info.engine_name) |name| {
+        log.debug("        engine_name: {s}", .{name});
+    }
+    log.debug("     engine_version: {f}", .{info.engine_version});
+    log.debug("        api_version: {f}", .{info.api_version});
+    log.debug("    extension_count: {d}", .{info.extension_count});
+    log.debug("  enabled_extension:", .{});
+    for (0..info.extension_count) |i| {
+        std.debug.print("\t\t\t - {s},\n", .{
+            info.enabled_extension.?[i],
+        });
+    }
 
     const this = try allocator.create(Vulkan);
     this.allocator = allocator;

@@ -49,26 +49,30 @@ pub const VulkanDesc = struct {
     api_version: Version,
     enabled_extension: ?[*]const [*:0]const u8,
     extension_count: u32,
+    allocator: ?*const vk.AllocationCallbacks = null,
 };
 
 vki: vk.InstanceProxy,
 allocator: Allocator,
 instance: vk.Instance,
 vki_wrapper: vk.InstanceWrapper,
+vk_allocator: ?*const vk.AllocationCallbacks,
 
 pub fn init(allocator: Allocator, loader_fn: anytype, info: VulkanDesc) !*Vulkan {
     log.debug("Creating vulkan backend", .{});
+    errdefer log.warn("Vulkan backend creation failed.", .{});
+
     if (info.application_name) |name| {
-        log.debug("   application_name: {s}", .{name});
+        log.info("   application_name: {s}", .{name});
     }
-    log.debug("application_version: {f}", .{info.application_version});
+    log.info("application_version: {f}", .{info.application_version});
     if (info.engine_name) |name| {
-        log.debug("        engine_name: {s}", .{name});
+        log.info("        engine_name: {s}", .{name});
     }
-    log.debug("     engine_version: {f}", .{info.engine_version});
-    log.debug("        api_version: {f}", .{info.api_version});
-    log.debug("    extension_count: {d}", .{info.extension_count});
-    log.debug("  enabled_extension:", .{});
+    log.info("     engine_version: {f}", .{info.engine_version});
+    log.info("        api_version: {f}", .{info.api_version});
+    log.info("    extension_count: {d}", .{info.extension_count});
+    log.info("  enabled_extension:", .{});
     for (0..info.extension_count) |i| {
         std.debug.print("\t\t\t - {s},\n", .{
             info.enabled_extension.?[i],
@@ -77,6 +81,7 @@ pub fn init(allocator: Allocator, loader_fn: anytype, info: VulkanDesc) !*Vulkan
 
     const this = try allocator.create(Vulkan);
     this.allocator = allocator;
+    this.vk_allocator = info.allocator;
 
     const vkb = vk.BaseWrapper.load(loader_fn);
 
@@ -102,17 +107,20 @@ pub fn init(allocator: Allocator, loader_fn: anytype, info: VulkanDesc) !*Vulkan
         .p_application_info = &app_info,
         .enabled_extension_count = info.extension_count,
         .pp_enabled_extension_names = info.enabled_extension,
-    }, null);
+    }, this.vk_allocator);
 
     this.vki_wrapper = vk.InstanceWrapper.load(this.instance, loader_fn);
     this.vki = vk.InstanceProxy.init(this.instance, &this.vki_wrapper);
 
+    log.debug("Vulkan backend has been created.", .{});
     return this;
 }
 
-pub fn deinit(self: *Vulkan) void {
-    self.vki.destroyInstance(null);
-    const allocator = self.allocator;
-    self.* = undefined;
-    allocator.destroy(self);
+pub fn deinit(this: *Vulkan) void {
+    log.debug("Destroying Vulkan backend.", .{});
+    this.vki.destroyInstance(this.vk_allocator);
+    const allocator = this.allocator;
+    this.* = undefined;
+    allocator.destroy(this);
+    log.debug("Vulkan backend has been destroyed.", .{});
 }

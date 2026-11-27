@@ -3,8 +3,8 @@ const Allocator = std.mem.Allocator;
 const Device = @import("../Device.zig");
 const rhi = @import("../Resource.zig");
 const Error = rhi.Error;
-const Queue = @import("../Queue.zig").Queue;
-const Sync = @import("Sync.zig");
+const Queue = @import("../Queue.zig");
+const sync = @import("sync.zig");
 const Resource = rhi.Resource;
 const log = std.log.scoped(.vfrhi);
 
@@ -361,8 +361,8 @@ pub const Swapchain = struct {
     pub fn acquireWithAddr(
         self: Swapchain,
         queue: Queue,
-        semaphore: ?Sync.Semaphore,
-        fence: ?Sync.Fence,
+        semaphore: ?sync.Semaphore,
+        fence: ?sync.Fence,
         ret_addr: usize,
     ) Error!Queue.Acquired {
         return try queue.rawAcquire(.{
@@ -388,8 +388,8 @@ pub const Swapchain = struct {
     pub fn acquire(
         self: Swapchain,
         queue: Queue,
-        semaphore: ?Sync.Semaphore,
-        fence: ?Sync.Fence,
+        semaphore: ?sync.Semaphore,
+        fence: ?sync.Fence,
     ) Error!Queue.Acquired {
         return acquireWithAddr(
             self,

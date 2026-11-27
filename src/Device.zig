@@ -91,7 +91,7 @@ pub const VTable = struct {
 };
 
 pub const Resource = rhi.Resource;
-pub const Queue = @import("Queue.zig").Queue;
+pub const Queue = @import("Queue.zig");
 pub const Command = @import("Command.zig").Command;
 pub const DescriptorWrite = rhi.DescriptorWrite;
 

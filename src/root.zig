@@ -6,6 +6,10 @@
 
 const std = @import("std");
 const build_options = @import("backend");
+const surface = @import("resources/surface.zig");
+const memory = @import("resources/memory.zig");
+const pipeline = @import("resources/pipeline.zig");
+const sync = @import("resources/sync.zig");
 
 /// The RHI's own log scope.
 pub const log = std.log.scoped(.vfrhi);
@@ -15,36 +19,36 @@ pub const Version = types.Version;
 pub const Error = types.Error;
 pub const Resource = types.Resource;
 pub const ResourceDescription = types.Resource.Description;
-pub const Command = @import("Command.zig").Command;
+pub const Command = CommandBuffer.Command;
 pub const Device = @import("Device.zig");
-pub const Queue = @import("Queue.zig").Queue;
-pub const Surface = @import("resources/Surface.zig").Surface;
-pub const Swapchain = @import("resources/Surface.zig").Swapchain;
-pub const Buffer = @import("resources/Memory.zig").Buffer;
-pub const Texture = @import("resources/Memory.zig").Texture;
-pub const TextureView = @import("resources/Memory.zig").TextureView;
-pub const Sampler = @import("resources/Memory.zig").Sampler;
-pub const Shader = @import("resources/Pipeline.zig").Shader;
-pub const DescriptorSetLayout = @import("resources/Pipeline.zig")
+pub const Queue = @import("Queue.zig");
+pub const Surface = surface.Surface;
+pub const Swapchain = surface.Swapchain;
+pub const Buffer = memory.Buffer;
+pub const Texture = memory.Texture;
+pub const TextureView = memory.TextureView;
+pub const Sampler = memory.Sampler;
+pub const Shader = pipeline.Shader;
+pub const DescriptorSetLayout = pipeline
     .DescriptorSetLayout;
-pub const PipelineLayout = @import("resources/Pipeline.zig")
+pub const PipelineLayout = pipeline
     .PipelineLayout;
-pub const DescriptorSet = @import("resources/Pipeline.zig").DescriptorSet;
-pub const GraphicsPipeline = @import("resources/Pipeline.zig")
+pub const DescriptorSet = pipeline.DescriptorSet;
+pub const GraphicsPipeline = pipeline
     .GraphicsPipeline;
-pub const ComputePipeline = @import("resources/Pipeline.zig")
+pub const ComputePipeline = pipeline
     .ComputePipeline;
-pub const CommandBuffer = @import("resources/Command.zig").CommandBuffer;
-pub const Fence = @import("resources/Sync.zig").Fence;
-pub const Semaphore = @import("resources/Sync.zig").Semaphore;
-pub const Test = @import("backend/test/root.zig").Test;
+pub const CommandBuffer = @import("resources/CommandBuffer.zig");
+pub const Fence = sync.Fence;
+pub const Semaphore = sync.Semaphore;
+pub const Test = @import("backend/test/root.zig");
 
 /// Whether the Vulkan backend was enabled at build time.
 pub const vulkan_enabled = build_options.vulkan;
 
 pub const Vulkan =
     if (build_options.vulkan)
-        @import("backend/vulkan/root.zig").Vulkan
+        @import("backend/vulkan/root.zig")
     else
         @compileError(
             "If you want to use Vulkan backend, " ++

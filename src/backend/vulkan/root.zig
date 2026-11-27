@@ -1,5 +1,7 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const rhi = @import("rhi");
+const Device = @import("../../Device.zig");
 const Vulkan = @This();
 const Allocator = std.mem.Allocator;
 const log = std.log.scoped(.vulkan);
@@ -123,4 +125,65 @@ pub fn deinit(this: *Vulkan) void {
     this.* = undefined;
     allocator.destroy(this);
     log.debug("Vulkan backend has been destroyed.", .{});
+}
+
+pub fn asDevice(self: *Vulkan) rhi.Device {
+    return .{
+        .vptr = self,
+        .vtable = &.{
+            .create = undefined,
+            .create_batch = undefined,
+            .destroy = undefined,
+            .destroy_batch = undefined,
+            .device_op = undefined,
+            .get_queue = undefined,
+            .map = undefined,
+            .query = undefined,
+            .record = undefined,
+            .unmap = undefined,
+        },
+    };
+}
+
+const Resource = rhi.Device.Resource;
+
+fn create(
+    self: *anyopaque,
+    description: Resource.Description,
+    ret_addr: usize,
+) rhi.Device.Error!Resource {
+    const this: *Vulkan = @ptrCast(@alignCast(self));
+    _ = ret_addr;
+    switch (description) {
+        .surface => |desc| {
+            this.vki.createWin32SurfaceKHR(
+                &.{
+                    .hinstance = @ptrFromInt(
+                        @as(usize, @intFromPtr(desc.win32.hinstance)),
+                    ),
+                    .hwnd = @ptrFromInt(
+                        @as(usize, @intFromPtr(desc.win32.hwnd)),
+                    ),
+                },
+                this.vk_allocator,
+            );
+        },
+    }
+}
+
+fn destroy(
+    self: *anyopaque,
+    res: Resource,
+    ret_addr: usize,
+) rhi.Device.Error!Resource {
+    const this: *Vulkan = @ptrCast(@alignCast(self));
+    _ = ret_addr;
+    switch (res.tag) {
+        .surface => {
+            this.vki.destroySurfaceKHR(
+                @bitCast(res.identifier),
+                this.vk_allocator,
+            );
+        },
+    }
 }

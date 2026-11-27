@@ -40,7 +40,7 @@ pub fn main(init: std.process.Init) !void {
         null,
     );
     if (window == null) return error.WindowCreationFailed;
-    defer glfw.glfwDestroyWindow(window);
+    defer window.?.glfwDestroyWindow();
 
     const allocator = init.gpa;
 

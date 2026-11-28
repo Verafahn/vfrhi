@@ -5,6 +5,26 @@ pub const Error = rhi.Error;
 const Version = rhi.Version;
 const Device = @This();
 
+const Surface = @import("resources/surface.zig").Surface;
+const Swapchain = @import("resources/surface.zig").Swapchain;
+const Buffer = @import("resources/memory.zig").Buffer;
+const Texture = @import("resources/memory.zig").Texture;
+const TextureView = @import("resources/memory.zig").TextureView;
+const Sampler = @import("resources/memory.zig").Sampler;
+const Shader = @import("resources/pipeline.zig").Shader;
+const DescriptorSetLayout =
+    @import("resources/pipeline.zig").DescriptorSetLayout;
+const PipelineLayout =
+    @import("resources/pipeline.zig").PipelineLayout;
+const DescriptorSet = @import("resources/pipeline.zig").DescriptorSet;
+const GraphicsPipeline =
+    @import("resources/pipeline.zig").GraphicsPipeline;
+const ComputePipeline =
+    @import("resources/pipeline.zig").ComputePipeline;
+const CommandBuffer = @import("resources/CommandBuffer.zig");
+const Fence = @import("resources/sync.zig").Fence;
+const Semaphore = @import("resources/sync.zig").Semaphore;
+
 /// The abstract device interface.
 ///
 /// A `Device` is created by a backend and owns every RHI resource
@@ -1074,3 +1094,52 @@ pub fn writeDescriptorSet(
         @returnAddress(),
     );
 }
+
+pub const createSurfaceWithAddr = Surface.createWithAddr;
+pub const createSurface = Surface.create;
+
+pub const createSwapchainWithAddr = Swapchain.createWithAddr;
+pub const createSwapchain = Swapchain.create;
+
+pub const createBufferWithAddr = Buffer.createWithAddr;
+pub const createBuffer = Buffer.create;
+
+pub const createTextureWithAddr = Texture.createWithAddr;
+pub const createTexture = Texture.create;
+
+pub const createTextureViewWithAddr = TextureView.createWithAddr;
+pub const createTextureView = TextureView.create;
+
+pub const createSamplerWithAddr = Sampler.createWithAddr;
+pub const createSampler = Sampler.create;
+
+pub const createShaderWithAddr = Shader.createWithAddr;
+pub const createShader = Shader.create;
+
+pub const createDescriptorSetLayoutWithAddr =
+    DescriptorSetLayout.createWithAddr;
+pub const createDescriptorSetLayout = DescriptorSetLayout.create;
+
+pub const createPipelineLayoutWithAddr =
+    PipelineLayout.createWithAddr;
+pub const createPipelineLayout = PipelineLayout.create;
+
+pub const createDescriptorSetWithAddr = DescriptorSet.createWithAddr;
+pub const createDescriptorSet = DescriptorSet.create;
+
+pub const createGraphicsPipelineWithAddr =
+    GraphicsPipeline.createWithAddr;
+pub const createGraphicsPipeline = GraphicsPipeline.create;
+
+pub const createComputePipelineWithAddr =
+    ComputePipeline.createWithAddr;
+pub const createComputePipeline = ComputePipeline.create;
+
+pub const createCommandBufferWithAddr = CommandBuffer.createWithAddr;
+pub const createCommandBuffer = CommandBuffer.create;
+
+pub const createFenceWithAddr = Fence.createWithAddr;
+pub const createFence = Fence.create;
+
+pub const createSemaphoreWithAddr = Semaphore.createWithAddr;
+pub const createSemaphore = Semaphore.create;

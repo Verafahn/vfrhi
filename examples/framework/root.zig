@@ -163,11 +163,11 @@ const VulkanSync = struct {
     in_flight: rhi.Fence,
 
     fn create(device: rhi.Device) !VulkanSync {
-        const image_available = try rhi.Semaphore.create(device, .{});
+        const image_available = try device.createSemaphore(.{});
         errdefer image_available.destroy();
-        const render_finished = try rhi.Semaphore.create(device, .{});
+        const render_finished = try device.createSemaphore(.{});
         errdefer render_finished.destroy();
-        const in_flight = try rhi.Fence.create(device, .{
+        const in_flight = try device.createFence(.{
             .signaled = true,
         });
         errdefer in_flight.destroy();
@@ -311,10 +311,10 @@ pub const App = struct {
             window,
             options,
         );
-        const surface = try rhi.Surface.create(device, native);
+        const surface = try device.createSurface(native);
         errdefer surface.destroy();
 
-        const swapchain = try rhi.Swapchain.create(device, .{
+        const swapchain = try device.createSwapchain(.{
             .surface = surface.resource,
             .width = options.width,
             .height = options.height,
@@ -328,10 +328,7 @@ pub const App = struct {
         const views = try swapchain.views(allocator);
         errdefer allocator.free(views);
 
-        const command_buffer = try rhi.CommandBuffer.create(
-            device,
-            .{},
-        );
+        const command_buffer = try device.createCommandBuffer(.{});
         errdefer command_buffer.destroy();
 
         const sync: ?VulkanSync = switch (options.backend) {
@@ -736,7 +733,7 @@ pub fn createShader(
     );
     defer allocator.free(words);
     @memcpy(std.mem.sliceAsBytes(words), bytes);
-    return rhi.Shader.create(device, .{
+    return device.createShader(.{
         .stage = stage,
         .code = words,
     });

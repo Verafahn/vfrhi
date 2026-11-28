@@ -47,13 +47,18 @@ Typed wrappers keep the owning device, the raw handle, and a few cached
 fields that are useful to callers:
 
 ```zig
-const buffer = try rhi.Buffer.create(device, .{
+const buffer = try device.createBuffer(.{
     .size = 4096,
     .usage = .{ .vertex = true },
     .memory = .{ .host_visible = true },
 });
 defer buffer.destroy();
 ```
+
+The typed wrappers also expose their creation function as a `Device`
+method, so `rhi.Buffer.create(device, ...)` and
+`device.createBuffer(...)` are equivalent. Both forms return the same
+wrapper type.
 
 The `resource` field is the backend handle used by commands, descriptor
 writes, and query calls. The other fields, such as `Buffer.size` or

@@ -102,13 +102,10 @@ pub fn main(init: std.process.Init) !void {
     );
     defer fragment_shader.destroy();
 
-    const pipeline_layout = try rhi.PipelineLayout.create(
-        device,
-        .{},
-    );
+    const pipeline_layout = try device.createPipelineLayout(.{});
     defer pipeline_layout.destroy();
 
-    const pipeline = try rhi.GraphicsPipeline.create(device, .{
+    const pipeline = try device.createGraphicsPipeline(.{
         .layout = pipeline_layout.resource,
         .vertex = vertex_shader.resource,
         .fragment = fragment_shader.resource,
@@ -132,7 +129,7 @@ pub fn main(init: std.process.Init) !void {
     });
     defer pipeline.destroy();
 
-    const vertex_buffer = try rhi.Buffer.create(device, .{
+    const vertex_buffer = try device.createBuffer(.{
         .size = std.mem.sliceAsBytes(vertices).len,
         .usage = .{ .vertex = true },
         .memory = .{ .host_visible = true },

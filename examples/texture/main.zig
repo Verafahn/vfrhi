@@ -75,7 +75,7 @@ pub fn main(init: std.process.Init) !void {
     );
     defer fragment_shader.destroy();
 
-    const texture = try rhi.Texture.create(device, .{
+    const texture = try device.createTexture(.{
         .format = .r8g8b8a8_unorm,
         .width = texture_size,
         .height = texture_size,
@@ -85,7 +85,7 @@ pub fn main(init: std.process.Init) !void {
     defer texture.destroy();
     const view = try texture.createView(.{});
     defer view.destroy();
-    const sampler = try rhi.Sampler.create(device, .{
+    const sampler = try device.createSampler(.{
         .mag_filter = .linear,
         .min_filter = .linear,
         .address_u = .clamp_to_edge,
@@ -93,7 +93,7 @@ pub fn main(init: std.process.Init) !void {
     });
     defer sampler.destroy();
 
-    const set_layout = try rhi.DescriptorSetLayout.create(device, .{
+    const set_layout = try device.createDescriptorSetLayout(.{
         .bindings = &.{.{
             .binding = 0,
             .kind = .combined_image_sampler,
@@ -101,11 +101,11 @@ pub fn main(init: std.process.Init) !void {
         }},
     });
     defer set_layout.destroy();
-    const pipeline_layout = try rhi.PipelineLayout.create(device, .{
+    const pipeline_layout = try device.createPipelineLayout(.{
         .descriptor_sets = &.{set_layout.resource},
     });
     defer pipeline_layout.destroy();
-    const descriptor_set = try rhi.DescriptorSet.create(device, .{
+    const descriptor_set = try device.createDescriptorSet(.{
         .layout = set_layout.resource,
     });
     defer descriptor_set.destroy();
@@ -117,7 +117,7 @@ pub fn main(init: std.process.Init) !void {
         } },
     }});
 
-    const pipeline = try rhi.GraphicsPipeline.create(device, .{
+    const pipeline = try device.createGraphicsPipeline(.{
         .layout = pipeline_layout.resource,
         .vertex = vertex_shader.resource,
         .fragment = fragment_shader.resource,
@@ -141,7 +141,7 @@ pub fn main(init: std.process.Init) !void {
     });
     defer pipeline.destroy();
 
-    const vertex_buffer = try rhi.Buffer.create(device, .{
+    const vertex_buffer = try device.createBuffer(.{
         .size = std.mem.sliceAsBytes(&vertices).len,
         .usage = .{ .vertex = true },
         .memory = .{ .host_visible = true },
@@ -149,7 +149,7 @@ pub fn main(init: std.process.Init) !void {
     });
     defer vertex_buffer.destroy();
 
-    const index_buffer = try rhi.Buffer.create(device, .{
+    const index_buffer = try device.createBuffer(.{
         .size = std.mem.sliceAsBytes(&indices).len,
         .usage = .{ .index = true },
         .memory = .{ .host_visible = true },

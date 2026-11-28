@@ -143,7 +143,7 @@ const zig_shader_fragment_spirv = [_]u32{
 };
 
 fn createHeadlessSurface(device: rhi.Device) !rhi.Surface {
-    return rhi.Surface.create(device, .{
+    return device.createSurface(.{
         .native = .{ .headless = .{ .width = 800, .height = 600 } },
     });
 }
@@ -211,7 +211,7 @@ test "surface and swapchain lifecycle" {
             surface_properties.current_height,
         );
 
-        const swapchain = try rhi.Swapchain.create(device, .{
+        const swapchain = try device.createSwapchain(.{
             .surface = surface.resource,
             .width = 800,
             .height = 600,
@@ -247,7 +247,7 @@ test "buffer mapping and initial data" {
 
     {
         const initial = [_]u8{ 1, 2, 3, 4 };
-        const buffer = try rhi.Buffer.create(device, .{
+        const buffer = try device.createBuffer(.{
             .size = 16,
             .memory = .{ .host_visible = true },
             .usage = .{ .storage = true },
@@ -282,7 +282,7 @@ test "device local buffer cannot be mapped" {
     const device = backend.asDevice();
 
     {
-        const buffer = try rhi.Buffer.create(device, .{
+        const buffer = try device.createBuffer(.{
             .size = 64,
             .memory = .{},
             .usage = .{ .uniform = true },
@@ -309,7 +309,7 @@ test "texture, view, and sampler lifecycle" {
         var pixels: [4 * 4 * 4]u8 = undefined;
         @memset(&pixels, 0x7f);
 
-        const texture = try rhi.Texture.create(device, .{
+        const texture = try device.createTexture(.{
             .format = .r8g8b8a8_unorm,
             .width = 4,
             .height = 4,
@@ -328,41 +328,38 @@ test "texture, view, and sampler lifecycle" {
 
         const view = try texture.createView(.{});
         defer view.destroy();
-        const sampler = try rhi.Sampler.create(device, .{});
+        const sampler = try device.createSampler(.{});
         defer sampler.destroy();
 
-        const descriptor_layout = try rhi.DescriptorSetLayout.create(
-            device,
-            .{
-                .bindings = &.{
-                    .{
-                        .binding = 0,
-                        .kind = .combined_image_sampler,
-                        .stages = .{ .fragment = true },
-                    },
-                    .{
-                        .binding = 1,
-                        .kind = .uniform_buffer,
-                        .stages = .{ .vertex = true },
-                    },
+        const descriptor_layout = try device.createDescriptorSetLayout(.{
+            .bindings = &.{
+                .{
+                    .binding = 0,
+                    .kind = .combined_image_sampler,
+                    .stages = .{ .fragment = true },
+                },
+                .{
+                    .binding = 1,
+                    .kind = .uniform_buffer,
+                    .stages = .{ .vertex = true },
                 },
             },
-        );
+        });
         defer descriptor_layout.destroy();
 
-        const pipeline_layout = try rhi.PipelineLayout.create(device, .{
+        const pipeline_layout = try device.createPipelineLayout(.{
             .descriptor_sets = &.{descriptor_layout.resource},
         });
         defer pipeline_layout.destroy();
 
-        const buffer = try rhi.Buffer.create(device, .{
+        const buffer = try device.createBuffer(.{
             .size = 64,
             .memory = .{ .host_visible = true },
             .usage = .{ .uniform = true },
         });
         defer buffer.destroy();
 
-        const set = try rhi.DescriptorSet.create(device, .{
+        const set = try device.createDescriptorSet(.{
             .layout = descriptor_layout.resource,
         });
         defer set.destroy();
@@ -395,22 +392,22 @@ test "pipeline creation and validation" {
     const device = backend.asDevice();
 
     {
-        const vertex = try rhi.Shader.create(device, .{
+        const vertex = try device.createShader(.{
             .stage = .vertex,
             .code = &.{0x07230203},
         });
         defer vertex.destroy();
 
-        const fragment = try rhi.Shader.create(device, .{
+        const fragment = try device.createShader(.{
             .stage = .fragment,
             .code = &.{0x07230203},
         });
         defer fragment.destroy();
 
-        const layout = try rhi.PipelineLayout.create(device, .{});
+        const layout = try device.createPipelineLayout(.{});
         defer layout.destroy();
 
-        const pipeline = try rhi.GraphicsPipeline.create(device, .{
+        const pipeline = try device.createGraphicsPipeline(.{
             .layout = layout.resource,
             .vertex = vertex.resource,
             .fragment = fragment.resource,
@@ -428,13 +425,13 @@ test "pipeline creation and validation" {
         });
         defer pipeline.destroy();
 
-        const compute_shader = try rhi.Shader.create(device, .{
+        const compute_shader = try device.createShader(.{
             .stage = .compute,
             .code = &.{0x07230203},
         });
         defer compute_shader.destroy();
 
-        const compute = try rhi.ComputePipeline.create(device, .{
+        const compute = try device.createComputePipeline(.{
             .layout = layout.resource,
             .shader = compute_shader.resource,
         });
@@ -454,7 +451,7 @@ test "command buffer draw submission and fence" {
     {
         const surface = try createHeadlessSurface(device);
         defer surface.destroy();
-        const swapchain = try rhi.Swapchain.create(device, .{
+        const swapchain = try device.createSwapchain(.{
             .surface = surface.resource,
             .width = 64,
             .height = 64,
@@ -465,19 +462,19 @@ test "command buffer draw submission and fence" {
         const views = try swapchain.views(testing.allocator);
         defer testing.allocator.free(views);
 
-        const vertex = try rhi.Shader.create(device, .{
+        const vertex = try device.createShader(.{
             .stage = .vertex,
             .code = &.{0x07230203},
         });
         defer vertex.destroy();
-        const fragment = try rhi.Shader.create(device, .{
+        const fragment = try device.createShader(.{
             .stage = .fragment,
             .code = &.{0x07230203},
         });
         defer fragment.destroy();
-        const layout = try rhi.PipelineLayout.create(device, .{});
+        const layout = try device.createPipelineLayout(.{});
         defer layout.destroy();
-        const pipeline = try rhi.GraphicsPipeline.create(device, .{
+        const pipeline = try device.createGraphicsPipeline(.{
             .layout = layout.resource,
             .vertex = vertex.resource,
             .fragment = fragment.resource,
@@ -485,9 +482,9 @@ test "command buffer draw submission and fence" {
         });
         defer pipeline.destroy();
 
-        const command_buffer = try rhi.CommandBuffer.create(device, .{});
+        const command_buffer = try device.createCommandBuffer(.{});
         defer command_buffer.destroy();
-        const fence = try rhi.Fence.create(device, .{});
+        const fence = try device.createFence(.{});
         defer fence.destroy();
 
         try command_buffer.begin();
@@ -524,7 +521,7 @@ test "command validation rejects invalid draws" {
     const device = backend.asDevice();
 
     {
-        const command_buffer = try rhi.CommandBuffer.create(device, .{});
+        const command_buffer = try device.createCommandBuffer(.{});
         defer command_buffer.destroy();
 
         try command_buffer.begin();
@@ -546,20 +543,20 @@ test "copy commands" {
     const device = backend.asDevice();
 
     {
-        const src = try rhi.Buffer.create(device, .{
+        const src = try device.createBuffer(.{
             .size = 64,
             .usage = .{ .transfer_src = true },
             .memory = .{ .host_visible = true },
         });
         defer src.destroy();
 
-        const dst = try rhi.Buffer.create(device, .{
+        const dst = try device.createBuffer(.{
             .size = 64,
             .usage = .{ .transfer_dst = true },
         });
         defer dst.destroy();
 
-        const command_buffer = try rhi.CommandBuffer.create(device, .{});
+        const command_buffer = try device.createCommandBuffer(.{});
         defer command_buffer.destroy();
 
         try command_buffer.begin();
@@ -673,7 +670,7 @@ test "leak detection" {
     defer backend.deinit();
     const device = backend.asDevice();
 
-    const buffer = try rhi.Buffer.create(device, .{
+    const buffer = try device.createBuffer(.{
         .size = 8,
         .memory = .{ .host_visible = true },
     });
@@ -690,7 +687,7 @@ test "dependency violation is logged" {
     const device = backend.asDevice();
 
     const surface = try createHeadlessSurface(device);
-    const swapchain = try rhi.Swapchain.create(device, .{
+    const swapchain = try device.createSwapchain(.{
         .surface = surface.resource,
         .width = 16,
         .height = 16,
@@ -711,7 +708,7 @@ test "stale handle is rejected" {
     defer backend.deinit();
     const device = backend.asDevice();
 
-    const buffer = try rhi.Buffer.create(device, .{
+    const buffer = try device.createBuffer(.{
         .size = 8,
         .memory = .{ .host_visible = true },
     });
@@ -730,13 +727,12 @@ test "fence wait and reset" {
     const device = backend.asDevice();
 
     {
-        const unsignaled = try rhi.Fence.create(device, .{});
+        const unsignaled = try device.createFence(.{});
         defer unsignaled.destroy();
         try testing.expectError(error.Timeout, unsignaled.wait(0));
         try unsignaled.reset();
 
-        const signaled = try rhi.Fence.create(
-            device,
+        const signaled = try device.createFence(
             .{ .signaled = true },
         );
         defer signaled.destroy();
@@ -755,7 +751,7 @@ test "invalid descriptor writes are rejected" {
     const device = backend.asDevice();
 
     {
-        const layout = try rhi.DescriptorSetLayout.create(device, .{
+        const layout = try device.createDescriptorSetLayout(.{
             .bindings = &.{.{
                 .binding = 0,
                 .kind = .uniform_buffer,
@@ -763,11 +759,11 @@ test "invalid descriptor writes are rejected" {
             }},
         });
         defer layout.destroy();
-        const set = try rhi.DescriptorSet.create(device, .{
+        const set = try device.createDescriptorSet(.{
             .layout = layout.resource,
         });
         defer set.destroy();
-        const buffer = try rhi.Buffer.create(device, .{
+        const buffer = try device.createBuffer(.{
             .size = 16,
             .memory = .{ .host_visible = true },
             .usage = .{ .uniform = true },
@@ -801,7 +797,7 @@ test "texture view depends on its texture" {
     defer backend.deinit();
     const device = backend.asDevice();
 
-    const texture = try rhi.Texture.create(device, .{
+    const texture = try device.createTexture(.{
         .format = .r8_unorm,
         .width = 2,
         .height = 2,
@@ -848,7 +844,7 @@ test "command state validation" {
     const device = backend.asDevice();
 
     {
-        const command_buffer = try rhi.CommandBuffer.create(device, .{});
+        const command_buffer = try device.createCommandBuffer(.{});
         defer command_buffer.destroy();
 
         try testing.expectError(
@@ -879,7 +875,7 @@ test "external resource data is accessible" {
 
     {
         const buffer_bytes = [_]u8{ 9, 8, 7, 6 };
-        const buffer = try rhi.Buffer.create(device, .{
+        const buffer = try device.createBuffer(.{
             .size = buffer_bytes.len,
             .memory = .{ .host_visible = true },
             .initial_data = &buffer_bytes,
@@ -892,7 +888,7 @@ test "external resource data is accessible" {
         );
 
         const texture_bytes: [16]u8 = @splat(0x11);
-        const texture = try rhi.Texture.create(device, .{
+        const texture = try device.createTexture(.{
             .format = .r8_unorm,
             .width = 4,
             .height = 4,
@@ -917,14 +913,14 @@ test "generation reuse rejects old handles" {
     const device = backend.asDevice();
 
     {
-        const first = try rhi.Buffer.create(device, .{
+        const first = try device.createBuffer(.{
             .size = 8,
             .memory = .{ .host_visible = true },
         });
         const old_handle = first.resource;
         first.destroy();
 
-        const second = try rhi.Buffer.create(device, .{
+        const second = try device.createBuffer(.{
             .size = 8,
             .memory = .{ .host_visible = true },
         });
@@ -945,6 +941,10 @@ test "generation reuse rejects old handles" {
 
     backend.clearErrors();
     try backend.validate();
+}
+
+test "device creation aliases" {
+    std.testing.refAllDecls(rhi.Device);
 }
 
 test "vulkan backend compiles when enabled" {

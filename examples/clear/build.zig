@@ -11,6 +11,8 @@ pub fn build(b: *Build) !void {
         .optimize = optimize,
         .vulkan = true,
         .opengl = true,
+        .dx3d11 = target.result.os.tag == .windows,
+        .dx3d12 = target.result.os.tag == .windows,
     });
     const rhi = rhi_dep.module("rhi");
 
@@ -41,6 +43,12 @@ pub fn build(b: *Build) !void {
         }),
     });
     exe.root_module.linkLibrary(glfw_dep.artifact("glfw"));
+    if (target.result.os.tag == .windows) {
+        exe.root_module.linkSystemLibrary("dxgi", .{});
+        exe.root_module.linkSystemLibrary("d3dcompiler_47", .{});
+        exe.root_module.linkSystemLibrary("d3d11", .{});
+        exe.root_module.linkSystemLibrary("d3d12", .{});
+    }
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);

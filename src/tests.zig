@@ -969,6 +969,162 @@ test "opengl backend compiles when enabled" {
     }
 }
 
+test "dx3d11 backend compiles when enabled" {
+    testing.log_level = test_log_level;
+    if (rhi.dx3d11_enabled) {
+        const Dx3d11 = rhi.Dx3d11;
+        _ = Dx3d11.init;
+        _ = Dx3d11.deinit;
+        _ = Dx3d11.asDevice;
+        std.testing.refAllDecls(Dx3d11);
+    }
+}
+
+test "dx3d12 backend compiles when enabled" {
+    testing.log_level = test_log_level;
+    if (rhi.dx3d12_enabled) {
+        const Dx3d12 = rhi.Dx3d12;
+        _ = Dx3d12.init;
+        _ = Dx3d12.deinit;
+        _ = Dx3d12.asDevice;
+        std.testing.refAllDecls(Dx3d12);
+    }
+}
+
+test "dx3d translator compiles" {
+    const spirv = @import("backend/dx3d/spirv.zig");
+    _ = spirv.translate;
+    _ = spirv.Backend;
+}
+
+test "dx3d translator emits HLSL" {
+    testing.log_level = test_log_level;
+    const spirv = @import("backend/dx3d/spirv.zig");
+
+    const vertex = try spirv.translate(
+        testing.allocator,
+        &opengl_vertex_spirv,
+        .vertex,
+        "main",
+        .d3d12,
+    );
+    defer vertex.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        vertex.source,
+        "SV_Position",
+    ) != null);
+    // Direct3D links stages by register, so user varyings must come
+    // before system values in the output struct.
+    const location_index = std.mem.indexOf(
+        u8,
+        vertex.source,
+        "LOCATION0;",
+    ) orelse return error.TestExpectedLocation;
+    const position_index = std.mem.indexOf(
+        u8,
+        vertex.source,
+        "SV_Position;",
+    ) orelse return error.TestExpectedPosition;
+    try testing.expect(location_index < position_index);
+    // D3D11 has no negative viewport heights, so the shader flips Y.
+    try testing.expect(std.mem.indexOf(
+        u8,
+        vertex.source,
+        ".y = -output.",
+    ) != null);
+
+    if (spirv.translate(
+        testing.allocator,
+        &opengl_vertex_block_spirv,
+        .vertex,
+        "main",
+        .d3d12,
+    )) |vertex_block| {
+        vertex_block.deinit();
+    } else |err| switch (err) {
+        error.Unsupported => {},
+        else => return err,
+    }
+
+    const fragment = try spirv.translate(
+        testing.allocator,
+        &opengl_fragment_spirv,
+        .fragment,
+        "main",
+        .d3d12,
+    );
+    defer fragment.deinit();
+
+    const ubo = try spirv.translate(
+        testing.allocator,
+        &opengl_ubo_fragment_spirv,
+        .fragment,
+        "main",
+        .d3d12,
+    );
+    defer ubo.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        ubo.source,
+        "cbuffer vfrhi_cb_s0_b0",
+    ) != null);
+
+    const textured = try spirv.translate(
+        testing.allocator,
+        &opengl_texture_fragment_spirv,
+        .fragment,
+        "main",
+        .d3d11,
+    );
+    defer textured.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured.source,
+        "Texture2D<float4>",
+    ) != null);
+    // Opaque parameters must be passed as values, never as type names.
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured.source,
+        "Texture2D<float4>,",
+    ) == null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured.source,
+        "Texture2D<float4>)",
+    ) == null);
+    // D3D11 uses flat register numbers and no register spaces.
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured.source,
+        "space",
+    ) == null);
+
+    const textured_d3d12 = try spirv.translate(
+        testing.allocator,
+        &opengl_texture_fragment_spirv,
+        .fragment,
+        "main",
+        .d3d12,
+    );
+    defer textured_d3d12.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured_d3d12.source,
+        ", space0",
+    ) != null);
+
+    const zig_shader = try spirv.translate(
+        testing.allocator,
+        &zig_shader_fragment_spirv,
+        .fragment,
+        "main",
+        .d3d12,
+    );
+    defer zig_shader.deinit();
+}
+
 test "opengl translator emits GLSL" {
     testing.log_level = test_log_level;
     if (!rhi.opengl_enabled) return;

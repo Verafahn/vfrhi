@@ -45,6 +45,12 @@ pub const vulkan_enabled = build_options.vulkan;
 /// Whether the OpenGL backend was enabled at build time.
 pub const opengl_enabled = build_options.opengl;
 
+/// Whether the Direct3D 11 backend was enabled at build time.
+pub const dx3d11_enabled = build_options.dx3d11;
+
+/// Whether the Direct3D 12 backend was enabled at build time.
+pub const dx3d12_enabled = build_options.dx3d12;
+
 pub const Vulkan =
     if (build_options.vulkan)
         @import("backend/vulkan/root.zig")
@@ -61,6 +67,24 @@ pub const OpenGL =
         @compileError(
             "If you want to use OpenGL backend, " ++
                 "please pass '.opengl=true' during build time.",
+        );
+
+pub const Dx3d11 =
+    if (build_options.dx3d11)
+        @import("backend/dx3d11/root.zig")
+    else
+        @compileError(
+            "If you want to use the Direct3D 11 backend, " ++
+                "please pass '.dx3d11=true' during build time.",
+        );
+
+pub const Dx3d12 =
+    if (build_options.dx3d12)
+        @import("backend/dx3d12/root.zig")
+    else
+        @compileError(
+            "If you want to use the Direct3D 12 backend, " ++
+                "please pass '.dx3d12=true' during build time.",
         );
 
 test {

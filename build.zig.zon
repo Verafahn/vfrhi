@@ -24,6 +24,11 @@
             .hash = "N-V-__8AAFOXiQJm2niapwlfcDuQxKKSbS6BJkr-Yud5uZGS",
             .lazy = true,
         },
+        .vfglad = .{
+            .url = "git+https://github.com/Verafahn/vfglad.git#f6266717a95ae0c8d1ec38d7565ec15a71fac8a0",
+            .hash = "vfglad-0.1.0-GcigqhngBgBLNOzMVygSkIoUO_sU_CYwTkpM5uLaGFiI",
+            .lazy = true,
+        },
     },
     .paths = .{
         "build.zig",

@@ -702,39 +702,3 @@ fn win32Surface(
         .hwnd = @intFromPtr(hwnd),
     } } };
 }
-
-/// Creates an RHI shader from embedded SPIR-V bytes.
-///
-/// # Args
-/// - `allocator`: temporary storage for the aligned SPIR-V words.
-/// - `device`: owning device.
-/// - `stage`: shader stage.
-/// - `bytes`: a little-endian SPIR-V module.
-///
-/// # Return
-/// A shader owned by the caller.
-///
-/// # Error
-/// - `error.InvalidShaderCode`: the byte length is not a multiple of
-///   four.
-/// - Errors from `Shader.create`.
-pub fn createShader(
-    allocator: Allocator,
-    device: rhi.Device,
-    stage: rhi.types.ShaderStage,
-    bytes: []const u8,
-) !rhi.Shader {
-    if (bytes.len == 0 or bytes.len % @sizeOf(u32) != 0) {
-        return error.InvalidShaderCode;
-    }
-    const words = try allocator.alloc(
-        u32,
-        bytes.len / @sizeOf(u32),
-    );
-    defer allocator.free(words);
-    @memcpy(std.mem.sliceAsBytes(words), bytes);
-    return device.createShader(.{
-        .stage = stage,
-        .code = words,
-    });
-}

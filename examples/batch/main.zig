@@ -2,8 +2,8 @@ const std = @import("std");
 const rhi = @import("vfrhi");
 const framework = @import("framework");
 
-const vertex_spv = @embedFile("vert_spv");
-const fragment_spv = @embedFile("frag_spv");
+const vertex_spv align(32) = @embedFile("vert_spv").*;
+const fragment_spv align(32) = @embedFile("frag_spv").*;
 
 /// Number of grid cells along one axis.
 const grid_size: u32 = 64;
@@ -87,19 +87,17 @@ pub fn main(init: std.process.Init) !void {
     defer app.deinit();
     const device = app.device;
 
-    const vertex_shader = try framework.createShader(
-        init.gpa,
-        device,
-        .vertex,
-        vertex_spv,
-    );
+    const vertex_shader = try device.createShader(.{
+        .code = @ptrCast(&vertex_spv),
+        .entry_point = "main",
+        .stage = .vertex,
+    });
     defer vertex_shader.destroy();
-    const fragment_shader = try framework.createShader(
-        init.gpa,
-        device,
-        .fragment,
-        fragment_spv,
-    );
+    const fragment_shader = try device.createShader(.{
+        .code = @ptrCast(&fragment_spv),
+        .entry_point = "main",
+        .stage = .fragment,
+    });
     defer fragment_shader.destroy();
 
     const pipeline_layout = try device.createPipelineLayout(.{});

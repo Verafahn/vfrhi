@@ -29,8 +29,5 @@
         "build.zig",
         "build.zig.zon",
         "src",
-        "examples",
-        "README.md",
-        "AGENT.md",
     },
 }

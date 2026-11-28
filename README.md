@@ -29,6 +29,10 @@ no GPU.
   constants, viewport, and scissor.
 - **Safe handles.** Destroyed, stale, or wrong-type handles are rejected
   instead of causing undefined behaviour.
+- **Five runnable examples.** Clear, triangle, indexed quad, batched
+  triangles, and texture mapping. Each one is an independent Zig project
+  that compiles its Zig shaders to SPIR-V and switches between Vulkan and
+  OpenGL with `--backend`.
 - **No window framework required.** You pass vfrhi the native window
   handles; GLFW, SDL, or your own platform layer all work.
 - **Small integration cost.** Importing vfrhi does not fetch the Vulkan
@@ -129,8 +133,9 @@ window system, the caller presents the window itself after
 
 OpenGL has no native SPIR-V entry point that is portable, so the backend
 converts SPIR-V to GLSL 4.50 before compiling it. The translator covers
-the shader subset emitted by `glslangValidator -V` / `glslc` for the
-stages and features vfrhi exposes. Modules that use obscure SPIR-V
+the shader subset emitted by Zig's SPIR-V backend and by
+`glslangValidator -V` / `glslc` for the stages and features vfrhi
+exposes. Modules that use obscure SPIR-V
 instructions return `error.Unsupported` instead of compiling silently
 wrong code.
 
@@ -310,9 +315,10 @@ defer pipeline.destroy();
 Compute pipelines use the same layouts with a single compute shader via
 `rhi.ComputePipeline.create`.
 
-Shaders are SPIR-V modules. Compile them with `glslangValidator -V` or
-`glslc`, embed the `.spv` bytes with `@embedFile`, and pass the words as
-`[]const u32`.
+Shaders are SPIR-V modules. The examples write shaders as Zig functions
+with the SPIR-V calling conventions and compile them to the
+`spirv32-vulkan` target in `build.zig`. Any SPIR-V producer, such as
+`glslangValidator -V` or `glslc`, also works.
 
 ## Render a frame
 
@@ -453,16 +459,41 @@ try std.testing.expectEqualSlices(
 
 ```sh
 zig build test --summary all    # headless test suite, no GPU needed
-zig build run-rhi               # build and run the Vulkan clear example
-zig build run-opengl            # build and run the OpenGL triangle example
 zig build test -Dvulkan=false   # skip the Vulkan backend and toolchain
 zig build test -Dopengl=false   # skip the OpenGL backend and loader
 zig build test -Ddisable-render=true # only build the test backend
 ```
 
-A complete frame loop with swapchain presentation lives in
-`examples/clear/main.zig` and `examples/opengl/main.zig`. Both examples
-use GLFW, but `src/` never assumes a window system exists.
+### Examples
+
+Every directory under `examples/` is an independent Zig project with its
+own `build.zig` and `build.zig.zon`. The manifest pulls in vfrhi from this
+repository, so the examples stay in sync with the interface.
+
+| Example | Demonstrates |
+| --- | --- |
+| `examples/clear` | Window creation and clearing a render pass |
+| `examples/triangle` | Vertex buffer, shaders, and a graphics pipeline |
+| `examples/quad` | Element buffer with `drawIndexed` |
+| `examples/batch` | Thousands of triangles in a single draw call |
+| `examples/texture` | Texture upload, sampler, and descriptor set |
+
+Run an example from its own directory and select the backend on the
+command line:
+
+```sh
+cd examples/triangle
+zig build run -- --backend vulkan --frames 2
+zig build run -- --backend opengl --frames 2
+```
+
+`--frames 0` keeps the window open until it is closed. Shaders live in
+each example's `shaders/` directory as Zig source files. The example
+`build.zig` compiles them to SPIR-V objects and embeds the resulting
+binaries with `@embedFile`; no external shader compiler is required.
+
+The examples use GLFW for window creation and input. vfrhi itself does
+not depend on GLFW, and `src/` never assumes a window system exists.
 
 ## Limitations
 

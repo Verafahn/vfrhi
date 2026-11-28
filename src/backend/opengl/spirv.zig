@@ -1199,12 +1199,21 @@ const Context = struct {
                 return error.InvalidSpirv;
             switch (type_kind) {
                 .pointer => |pointer| {
-                    try source.print("inout {s}", .{
-                        try self.declaration(
-                            pointer.pointee,
-                            param_name,
-                        ),
-                    });
+                    if (self.isOpaque(pointer.pointee)) {
+                        try source.print("{s}", .{
+                            try self.declaration(
+                                pointer.pointee,
+                                param_name,
+                            ),
+                        });
+                    } else {
+                        try source.print("inout {s}", .{
+                            try self.declaration(
+                                pointer.pointee,
+                                param_name,
+                            ),
+                        });
+                    }
                 },
                 else => {
                     try source.print("{s}", .{
@@ -1730,7 +1739,11 @@ const Context = struct {
             try self.valueName(operands[2])
         else
             "";
-        const b = if (operands.len > 3)
+        // `OpCompositeExtract` and `OpArrayLength` carry literal
+        // indices after the composite operand, so they must not be
+        // resolved as ids.
+        const b = if (operands.len > 3 and
+            inst.opcode != 81 and inst.opcode != 68)
             try self.valueName(operands[3])
         else
             "";
@@ -2502,7 +2515,7 @@ const Context = struct {
         if (operands.len < 3) return error.InvalidSpirv;
         var builder = std.ArrayListUnmanaged(u8).empty;
         defer builder.deinit(self.a);
-        try builder.appendSlice(self.a, try self.valueName(operands[2]));
+        try builder.appendSlice(self.a, try self.lvalue(operands[2]));
 
         const base_type_id = self.ids[operands[2]].type_id;
         const pointer = switch (self.types[base_type_id] orelse
@@ -2742,12 +2755,16 @@ const Context = struct {
             .bool => return "false",
             .int => |value| return if (value.signed) "0" else "0u",
             .float => return "0.0",
-            .vector => |value| {
+            .vector => {
                 return self.fmt("{s}(0)", .{
-                    try self.typeName(value.component),
+                    try self.typeName(type_id),
                 });
             },
-            .matrix => return "0.0",
+            .matrix => {
+                return self.fmt("{s}(0.0)", .{
+                    try self.typeName(type_id),
+                });
+            },
             .array => |value| {
                 var builder = std.ArrayListUnmanaged(u8).empty;
                 defer builder.deinit(self.a);

@@ -1,0 +1,21 @@
+.{
+    .name = .vfrhi_batch,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.17.1",
+    .fingerprint = 0xa16d1beb25ce31ca,
+    .dependencies = .{
+        .vfrhi = .{
+            .path = "../..",
+        },
+        .glfw_zig = .{
+            .url = "https://github.com/tiawl/glfw.zig/archive/refs/tags/vulkan.zig-v1.4.365.tar.gz",
+            .hash = "glfw_zig-1.0.0-NrvYoxInGgCd0xJ5a4UL2mi9q77pmpwTIwSZ4Tlm4ylz",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "main.zig",
+        "shaders",
+    },
+}

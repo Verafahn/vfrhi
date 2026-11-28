@@ -42,6 +42,9 @@ pub const Test = @import("backend/test/root.zig");
 /// Whether the Vulkan backend was enabled at build time.
 pub const vulkan_enabled = build_options.vulkan;
 
+/// Whether the OpenGL backend was enabled at build time.
+pub const opengl_enabled = build_options.opengl;
+
 pub const Vulkan =
     if (build_options.vulkan)
         @import("backend/vulkan/root.zig")
@@ -49,6 +52,15 @@ pub const Vulkan =
         @compileError(
             "If you want to use Vulkan backend, " ++
                 "please pass '.vulkan=true' during build time.",
+        );
+
+pub const OpenGL =
+    if (build_options.opengl)
+        @import("backend/opengl/root.zig")
+    else
+        @compileError(
+            "If you want to use OpenGL backend, " ++
+                "please pass '.opengl=true' during build time.",
         );
 
 test {

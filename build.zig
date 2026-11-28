@@ -1,20 +1,33 @@
 const std = @import("std");
 const Build = std.Build;
 
+/// Build options that decide which parts of the project are compiled.
+const Config = struct {
+    use_vulkan: bool,
+    use_opengl: bool,
+};
+
 pub fn build(b: *Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const is_root = b.isRoot();
+    const config = readConfig(b);
 
+    const rhi = createRhiModule(b, target, optimize, config);
+    try configureBackends(b, rhi, target, optimize, config);
+    addTestStep(b, rhi);
+}
+
+fn readConfig(b: *Build) Config {
+    const is_root = b.isRoot();
     const disable_render = b.option(
         bool,
         "disable-render",
         "Disable any rendering backend for testing purposes.",
     ) orelse false;
 
-    // Importing vfrhi must not pull in the Vulkan toolchain. The
+    // Importing vfrhi must not pull in a graphics toolchain. A
     // backend is fetched only when this project is the root package
-    // or when the importer enables the 'vulkan' feature.
+    // or when the importer enables it explicitly.
     const use_vulkan = b.option(
         bool,
         "vulkan",
@@ -26,8 +39,21 @@ pub fn build(b: *Build) !void {
         "Enable opengl backend.",
     ) orelse is_root and !disable_render;
 
+    return .{
+        .use_vulkan = use_vulkan,
+        .use_opengl = use_opengl,
+    };
+}
+
+fn createRhiModule(
+    b: *Build,
+    target: Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    config: Config,
+) *Build.Module {
     const backend_options = b.addOptions();
-    backend_options.addOption(bool, "vulkan", use_vulkan);
+    backend_options.addOption(bool, "vulkan", config.use_vulkan);
+    backend_options.addOption(bool, "opengl", config.use_opengl);
 
     const rhi = b.addModule("rhi", .{
         .root_source_file = b.path("src/root.zig"),
@@ -36,103 +62,53 @@ pub fn build(b: *Build) !void {
     });
     rhi.addImport("rhi", rhi);
     rhi.addOptions("backend", backend_options);
+    return rhi;
+}
 
-    const vulkan_module = blk: {
-        if (use_vulkan) {
-            const dep_vulkan_headers = try b.dependencyLazy(
-                "vulkan_headers",
-                .{},
-            );
-            const dep_vulkan = try b.dependencyLazy(
-                "vulkan",
-                .{
-                    .registry = dep_vulkan_headers.path(
-                        "registry/vk.xml",
-                    ),
-                },
-            );
-            const module = dep_vulkan.module("vulkan-zig");
-            rhi.addImport("vulkan", module);
-            break :blk module;
-        }
-        break :blk null;
-    };
-    const opengl_module = blk: {
-        if (use_opengl) {
-            const vfglad = try b.dependencyLazy(
-                "vfglad",
-                .{
-                    .target = target,
-                    .optimize = optimize,
-                },
-            );
-            const module = vfglad.module("glad");
-            rhi.addImport("glad", module);
-            break :blk module;
-        }
-        break :blk null;
-    };
-    const test_rhi = b.addTest(.{ .root_module = rhi });
+fn configureBackends(
+    b: *Build,
+    rhi: *Build.Module,
+    target: Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    config: Config,
+) !void {
+    try addVulkanBackend(b, rhi, config.use_vulkan);
+    try addOpenGlBackend(b, rhi, target, optimize, config.use_opengl);
+}
 
-    const run_test_rhi = b.addRunArtifact(test_rhi);
-    const test_step = b.step("test", "Test module 'vfrhi'.");
-    test_step.dependOn(&run_test_rhi.step);
+fn addVulkanBackend(
+    b: *Build,
+    rhi: *Build.Module,
+    enabled: bool,
+) !void {
+    if (!enabled) return;
 
-    if (!is_root) return;
+    const headers = try b.dependencyLazy("vulkan_headers", .{});
+    const vulkan = try b.dependencyLazy("vulkan", .{
+        .registry = headers.path("registry/vk.xml"),
+    });
+    rhi.addImport("vulkan", vulkan.module("vulkan-zig"));
+}
 
-    // Examples and their window manager dependency are only built
-    // when this project is the root package.
-    if (vulkan_module == null) {
-        return;
-    }
+fn addOpenGlBackend(
+    b: *Build,
+    rhi: *Build.Module,
+    target: Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    enabled: bool,
+) !void {
+    if (!enabled) return;
 
-    const translate_c = b.lazyImport(@This(), "translate_c") orelse
-        return;
-    const dep_translate_c = try b.dependencyLazy(
-        "translate_c",
-        .{},
-    );
-    const Translator = translate_c.Translator;
-
-    const dep_glfw_zig = try b.dependencyLazy("glfw_zig", .{});
-    const glfw = Translator.init(dep_translate_c, .{
-        .c_source_file = dep_glfw_zig.path(
-            "glfw/include/GLFW/glfw3.h",
-        ),
+    const vfglad = try b.dependencyLazy("vfglad", .{
         .target = target,
         .optimize = optimize,
     });
-    glfw.mod.linkLibrary(dep_glfw_zig.artifact("glfw"));
+    rhi.addImport("glad", vfglad.module("glad"));
+}
 
-    const clear = b.addExecutable(.{
-        .name = "rhi-clear",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("examples/clear/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{
-                    .name = "vulkan",
-                    .module = vulkan_module.?,
-                },
-                .{
-                    .name = "glfw",
-                    .module = glfw.mod,
-                },
-                .{
-                    .name = "vfrhi",
-                    .module = rhi,
-                },
-            },
-        }),
-    });
-    b.installArtifact(clear);
-
-    const run_clear = b.addRunArtifact(clear);
-    const run_clear_step = b.step(
-        "run-rhi",
-        "Run the RHI clear example.",
-    );
-    run_clear_step.dependOn(&run_clear.step);
-    run_clear.step.dependOn(b.getInstallStep());
+fn addTestStep(b: *Build, rhi: *Build.Module) void {
+    const test_rhi = b.addTest(.{ .root_module = rhi });
+    const run_test_rhi = b.addRunArtifact(test_rhi);
+    const test_step = b.step("test", "Test module 'vfrhi'.");
+    test_step.dependOn(&run_test_rhi.step);
 }

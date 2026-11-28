@@ -10,9 +10,12 @@ no GPU.
 ## Features
 
 - **One API, multiple backends.** The same resources and commands run on
-  the Vulkan backend and on the built-in test backend.
+  the Vulkan backend, the OpenGL backend, and the built-in test backend.
 - **Vulkan 1.3 backend.** Dynamic rendering, graphics and compute
   pipelines, SPIR-V shaders, and Win32, Xlib, or Wayland surfaces.
+- **OpenGL 4.5 backend.** GLAD loaded entry points, immutable textures,
+  direct state access, dynamic rendering emulated with framebuffers, and
+  automatic SPIR-V to GLSL translation.
 - **Tests without a GPU.** `rhi.Test` catches leaks, incorrect
   destruction order, stale handles, invalid map/unmap calls, invalid
   command buffer state, and bad submission parameters. It also exposes
@@ -26,6 +29,10 @@ no GPU.
   constants, viewport, and scissor.
 - **Safe handles.** Destroyed, stale, or wrong-type handles are rejected
   instead of causing undefined behaviour.
+- **Five runnable examples.** Clear, triangle, indexed quad, batched
+  triangles, and texture mapping. Each one is an independent Zig project
+  that compiles its Zig shaders to SPIR-V and switches between Vulkan and
+  OpenGL with `--backend`.
 - **No window framework required.** You pass vfrhi the native window
   handles; GLFW, SDL, or your own platform layer all work.
 - **Small integration cost.** Importing vfrhi does not fetch the Vulkan
@@ -38,6 +45,10 @@ no GPU.
   Enable the instance extension for your window system when you create
   the backend (`VK_KHR_win32_surface`, `VK_KHR_xlib_surface`, or
   `VK_KHR_wayland_surface`).
+- For the OpenGL backend: an OpenGL 4.5 core profile context. The caller
+  creates and owns the window, context, and loader; vfrhi never touches
+  the window system. Shaders are accepted as SPIR-V and decompiled to
+  GLSL 4.50 by the backend.
 
 ## Installation
 
@@ -54,15 +65,17 @@ const vfrhi = b.dependency("vfrhi", .{
     .target = target,
     .optimize = optimize,
     .vulkan = true, // omit to skip the Vulkan toolchain
+    .opengl = true, // omit to skip the OpenGL loader
 });
 
 exe.root_module.addImport("vfrhi", vfrhi.module("rhi"));
 ```
 
-Vulkan is off by default when vfrhi is a dependency, so referencing
-`rhi.Vulkan` without `.vulkan = true` is a compile error. When building
-vfrhi itself, Vulkan is enabled by default; pass `-Dvulkan=false` to
-`zig build` to turn it off.
+Both backends are off by default when vfrhi is a dependency, so
+referencing `rhi.Vulkan` or `rhi.OpenGL` without enabling the matching
+option is a compile error. When building vfrhi itself, both are enabled
+by default; pass `-Dvulkan=false` or `-Dopengl=false` to `zig build` to
+turn one off.
 
 ## Quick start
 
@@ -94,6 +107,37 @@ Destroy every RHI resource before `backend.deinit()`. Each resource has
 an explicit `destroy` method, and `device.createBatch` /
 `device.destroyBatch` are available when you want to create or destroy
 several at once.
+
+### OpenGL
+
+Make the context current first, then initialize the backend with a GLAD
+compatible loader such as `glfwGetProcAddress`:
+
+```zig
+const backend = try rhi.OpenGL.init(
+    gpa,
+    glfw.glfwGetProcAddress,
+    .{ .api_version = .make(0, 4, 5, 0) },
+);
+defer backend.deinit();
+
+const device = backend.asDevice();
+const queue = try device.getQueue(0);
+```
+
+The OpenGL backend requires a 4.5 core profile. It exposes swapchain
+images as textures rendered through framebuffers and presents them by
+blitting to the default framebuffer. Because vfrhi must not depend on a
+window system, the caller presents the window itself after
+`Swapchain.present`, for example with `glfwSwapBuffers(window)`.
+
+OpenGL has no native SPIR-V entry point that is portable, so the backend
+converts SPIR-V to GLSL 4.50 before compiling it. The translator covers
+the shader subset emitted by Zig's SPIR-V backend and by
+`glslangValidator -V` / `glslc` for the stages and features vfrhi
+exposes. Modules that use obscure SPIR-V
+instructions return `error.Unsupported` instead of compiling silently
+wrong code.
 
 Create a surface from a native window handle and a swapchain from the
 surface:
@@ -271,9 +315,10 @@ defer pipeline.destroy();
 Compute pipelines use the same layouts with a single compute shader via
 `rhi.ComputePipeline.create`.
 
-Shaders are SPIR-V modules. Compile them with `glslangValidator -V` or
-`glslc`, embed the `.spv` bytes with `@embedFile`, and pass the words as
-`[]const u32`.
+Shaders are SPIR-V modules. The examples write shaders as Zig functions
+with the SPIR-V calling conventions and compile them to the
+`spirv32-vulkan` target in `build.zig`. Any SPIR-V producer, such as
+`glslangValidator -V` or `glslc`, also works.
 
 ## Render a frame
 
@@ -414,22 +459,54 @@ try std.testing.expectEqualSlices(
 
 ```sh
 zig build test --summary all    # headless test suite, no GPU needed
-zig build run-rhi               # build and run the clear example
 zig build test -Dvulkan=false   # skip the Vulkan backend and toolchain
+zig build test -Dopengl=false   # skip the OpenGL backend and loader
+zig build test -Ddisable-render=true # only build the test backend
 ```
 
-A complete frame loop with swapchain presentation lives in
-`examples/clear/main.zig`. It creates a Win32 surface on Windows; on
-other platforms, supply the surface description for your native window
-system.
+### Examples
+
+Every directory under `examples/` is an independent Zig project with its
+own `build.zig` and `build.zig.zon`. The manifest pulls in vfrhi from this
+repository, so the examples stay in sync with the interface.
+
+| Example | Demonstrates |
+| --- | --- |
+| `examples/clear` | Window creation and clearing a render pass |
+| `examples/triangle` | Vertex buffer, shaders, and a graphics pipeline |
+| `examples/quad` | Element buffer with `drawIndexed` |
+| `examples/batch` | Thousands of triangles in a single draw call |
+| `examples/texture` | Texture upload, sampler, and descriptor set |
+
+Run an example from its own directory and select the backend on the
+command line:
+
+```sh
+cd examples/triangle
+zig build run -- --backend vulkan --frames 2
+zig build run -- --backend opengl --frames 2
+```
+
+`--frames 0` keeps the window open until it is closed. Shaders live in
+each example's `shaders/` directory as Zig source files. The example
+`build.zig` compiles them to SPIR-V objects and embeds the resulting
+binaries with `@embedFile`; no external shader compiler is required.
+
+The examples use GLFW for window creation and input. vfrhi itself does
+not depend on GLFW, and `src/` never assumes a window system exists.
 
 ## Limitations
 
-- Only the Vulkan backend is implemented so far. The test backend
-  validates calls but does not rasterize anything.
+- The test backend validates calls but does not rasterize anything.
 - The Vulkan backend requires Vulkan 1.3 and dynamic rendering, and it
   does not provide a headless surface. Use the test backend for GPU-free
   runs.
+- The OpenGL backend requires OpenGL 4.5 core, a current context, and a
+  caller supplied loader. It emulates swapchains with textures, has no
+  real semaphores, and reports one memory heap with size `0` because
+  OpenGL exposes no heap size. Shaders are translated from SPIR-V to
+  GLSL before compiling, and presentation does not swap the window
+  buffer.
 - The command set does not yet include indirect draws, timestamp
   queries, or advanced features such as ray tracing and mesh shaders.
 - The project is pre-1.0 and the API may change between releases.

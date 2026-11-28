@@ -1,8 +1,8 @@
 # vfrhi
 
 A render hardware interface (RHI) for Zig. Write rendering code once and
-run it on Vulkan — or run the exact same code headlessly in tests, with
-no GPU.
+run it on Vulkan, OpenGL, or Direct3D 11/12 — or run the exact same code
+headlessly in tests, with no GPU.
 
 [![CI](https://github.com/Verafahn/vfrhi/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Verafahn/vfrhi/actions/workflows/ci.yml)
 ![Zig](https://img.shields.io/badge/zig-0.17.1-f7a41d)
@@ -10,12 +10,17 @@ no GPU.
 ## Features
 
 - **One API, multiple backends.** The same resources and commands run on
-  the Vulkan backend, the OpenGL backend, and the built-in test backend.
+  the Vulkan backend, the OpenGL backend, the Direct3D 11 and 12
+  backends, and the built-in test backend.
 - **Vulkan 1.3 backend.** Dynamic rendering, graphics and compute
   pipelines, SPIR-V shaders, and Win32, Xlib, or Wayland surfaces.
 - **OpenGL 4.5 backend.** GLAD loaded entry points, immutable textures,
   direct state access, dynamic rendering emulated with framebuffers, and
   automatic SPIR-V to GLSL translation.
+- **Direct3D 11 and 12 backends (Windows).** Native D3D11 devices and a
+  D3D12 device with a direct queue, descriptor heaps, and command
+  allocators. Shaders are accepted as SPIR-V and translated to HLSL,
+  then compiled with the system D3DCompiler at runtime.
 - **Tests without a GPU.** `rhi.Test` catches leaks, incorrect
   destruction order, stale handles, invalid map/unmap calls, invalid
   command buffer state, and bad submission parameters. It also exposes
@@ -31,8 +36,8 @@ no GPU.
   instead of causing undefined behaviour.
 - **Five runnable examples.** Clear, triangle, indexed quad, batched
   triangles, and texture mapping. Each one is an independent Zig project
-  that compiles its Zig shaders to SPIR-V and switches between Vulkan and
-  OpenGL with `--backend`.
+  that compiles its Zig shaders to SPIR-V and switches between Vulkan,
+  OpenGL, Direct3D 11, and Direct3D 12 with `--backend`.
 - **No window framework required.** You pass vfrhi the native window
   handles; GLFW, SDL, or your own platform layer all work.
 - **Small integration cost.** Importing vfrhi does not fetch the Vulkan
@@ -49,6 +54,10 @@ no GPU.
   creates and owns the window, context, and loader; vfrhi never touches
   the window system. Shaders are accepted as SPIR-V and decompiled to
   GLSL 4.50 by the backend.
+- For the Direct3D 11 and 12 backends: Windows 10 or later. Direct3D 12
+  also needs a device that supports feature level 11.0. SPIR-V shaders
+  are translated to HLSL 5.x and compiled with `d3dcompiler_47.dll`,
+  which ships with Windows.
 
 ## Installation
 
@@ -66,16 +75,22 @@ const vfrhi = b.dependency("vfrhi", .{
     .optimize = optimize,
     .vulkan = true, // omit to skip the Vulkan toolchain
     .opengl = true, // omit to skip the OpenGL loader
+    .dx3d11 = true, // omit to skip the Direct3D 11 backend
+    .dx3d12 = true, // omit to skip the Direct3D 12 backend
 });
 
 exe.root_module.addImport("vfrhi", vfrhi.module("rhi"));
 ```
 
-Both backends are off by default when vfrhi is a dependency, so
-referencing `rhi.Vulkan` or `rhi.OpenGL` without enabling the matching
-option is a compile error. When building vfrhi itself, both are enabled
-by default; pass `-Dvulkan=false` or `-Dopengl=false` to `zig build` to
-turn one off.
+All backends are off by default when vfrhi is a dependency, so
+referencing `rhi.Vulkan`, `rhi.OpenGL`, `rhi.Dx3d11`, or `rhi.Dx3d12`
+without enabling the matching option is a compile error. When building
+vfrhi itself, Vulkan, OpenGL, and (on Windows) both Direct3D backends
+are enabled by default; pass `-Dvulkan=false`, `-Dopengl=false`,
+`-Ddx3d11=false`, or `-Ddx3d12=false` to `zig build` to turn one off.
+The Direct3D backends are only available when the target is Windows:
+they stay off for every other target, and enabling them explicitly for
+such a target is a build error.
 
 ## Quick start
 
@@ -138,6 +153,37 @@ the shader subset emitted by Zig's SPIR-V backend and by
 exposes. Modules that use obscure SPIR-V
 instructions return `error.Unsupported` instead of compiling silently
 wrong code.
+
+### Direct3D 11 and 12
+
+Both Direct3D backends ship in the same RHI module on Windows and
+share one hand-written bindings file, so no extra package is fetched.
+When the options are enabled, the module links `dxgi`,
+`d3dcompiler_47`, and the matching `d3d11` or `d3d12` library from the
+system.
+
+```zig
+const backend = try rhi.Dx3d11.init(gpa, .{});
+// or
+const backend = try rhi.Dx3d12.init(gpa, .{});
+defer backend.deinit();
+
+const device = backend.asDevice();
+const queue = try device.getQueue(0);
+```
+
+Like the other backends, vfrhi never creates a window. Pass the Win32
+`HWND` in `SurfaceDescription`; a headless surface with a width and
+height uses offscreen textures instead. Swapchain presentation calls
+`IDXGISwapChain::Present`, so the caller does not swap buffers itself.
+
+Direct3D consumes HLSL and DXBC, not SPIR-V, so both backends translate
+the module to HLSL 5.x and call `D3DCompile`. The translator covers the
+same SPIR-V subset as the OpenGL translator: rasterization stages,
+uniform blocks, push constants, combined image samplers, and simple
+control flow. Storage buffers and atomics return `error.Unsupported`.
+The generated shaders flip the clip-space Y so the same SPIR-V draws the
+same image as it does on Vulkan.
 
 Create a surface from a native window handle and a swapchain from the
 surface:
@@ -461,6 +507,7 @@ try std.testing.expectEqualSlices(
 zig build test --summary all    # headless test suite, no GPU needed
 zig build test -Dvulkan=false   # skip the Vulkan backend and toolchain
 zig build test -Dopengl=false   # skip the OpenGL backend and loader
+zig build test -Ddx3d11=false -Ddx3d12=false # skip the Direct3D backends
 zig build test -Ddisable-render=true # only build the test backend
 ```
 
@@ -485,12 +532,15 @@ command line:
 cd examples/triangle
 zig build run -- --backend vulkan --frames 2
 zig build run -- --backend opengl --frames 2
+zig build run -- --backend dx3d11 --frames 2
+zig build run -- --backend dx3d12 --frames 2
 ```
 
 `--frames 0` keeps the window open until it is closed. Shaders live in
 each example's `shaders/` directory as Zig source files. The example
 `build.zig` compiles them to SPIR-V objects and embeds the resulting
 binaries with `@embedFile`; no external shader compiler is required.
+The Direct3D backends are only compiled into the examples on Windows.
 
 The examples use GLFW for window creation and input. vfrhi itself does
 not depend on GLFW, and `src/` never assumes a window system exists.
@@ -507,6 +557,13 @@ not depend on GLFW, and `src/` never assumes a window system exists.
   OpenGL exposes no heap size. Shaders are translated from SPIR-V to
   GLSL before compiling, and presentation does not swap the window
   buffer.
+- The Direct3D backends are Windows only and require
+  `d3dcompiler_47.dll` at runtime. Shaders are translated from SPIR-V to
+  HLSL 5.x; storage buffers, atomics, and geometry or tessellation
+  stages are not supported yet. Some drivers expose flip-model
+  swapchains whose non-zero back buffers cannot be used as render
+  targets; the Direct3D 11 backend detects this and falls back to a
+  single-buffer bitblt swapchain whose images alias one back buffer.
 - The command set does not yet include indirect draws, timestamp
   queries, or advanced features such as ray tracing and mesh shaders.
 - The project is pre-1.0 and the API may change between releases.

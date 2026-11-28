@@ -1,9 +1,9 @@
 //! Shared window, backend, and frame loop plumbing for the vfrhi
 //! examples.
 //!
-//! An example picks a backend at run time with
-//! `--backend vulkan` or `--backend opengl`, then records its commands
-//! between `beginPass` and `endPass`.
+//! An example picks a backend at run time with `--backend vulkan`,
+//! `--backend opengl`, `--backend dx3d11`, or `--backend dx3d12`, then
+//! records its commands between `beginPass` and `endPass`.
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -21,11 +21,25 @@ pub const BackendKind = enum {
     vulkan,
     /// The OpenGL backend.
     opengl,
+    /// The Direct3D 11 backend.
+    dx3d11,
+    /// The Direct3D 12 backend.
+    dx3d12,
 
     /// Parses a backend name case-insensitively.
     pub fn parse(text: []const u8) ?BackendKind {
         if (std.ascii.eqlIgnoreCase(text, "vulkan")) return .vulkan;
         if (std.ascii.eqlIgnoreCase(text, "opengl")) return .opengl;
+        if (std.ascii.eqlIgnoreCase(text, "dx3d11") or
+            std.ascii.eqlIgnoreCase(text, "d3d11"))
+        {
+            return .dx3d11;
+        }
+        if (std.ascii.eqlIgnoreCase(text, "dx3d12") or
+            std.ascii.eqlIgnoreCase(text, "d3d12"))
+        {
+            return .dx3d12;
+        }
         return null;
     }
 
@@ -102,8 +116,8 @@ pub fn printUsage(description: []const u8) void {
         \\
         \\usage: zig build run -- [options]
         \\
-        \\  -b, --backend <vulkan|opengl>  rendering backend (default: vulkan)
-        \\      --frames <count>           stop after count frames, 0 runs until close
+        \\  -b, --backend <name>  vulkan, opengl, dx3d11, or dx3d12
+        \\      --frames <count>  stop after count frames, 0 runs until close
         \\  -h, --help                     show this message
         \\
     , .{description});
@@ -171,9 +185,19 @@ const VulkanSync = struct {
     }
 };
 
+const dx3d11_available = builtin.os.tag == .windows and
+    rhi.dx3d11_enabled;
+const dx3d12_available = builtin.os.tag == .windows and
+    rhi.dx3d12_enabled;
+
+const Dx3d11Ptr = if (dx3d11_available) *rhi.Dx3d11 else void;
+const Dx3d12Ptr = if (dx3d12_available) *rhi.Dx3d12 else void;
+
 const Backend = union(BackendKind) {
     vulkan: *rhi.Vulkan,
     opengl: *rhi.OpenGL,
+    dx3d11: Dx3d11Ptr,
+    dx3d12: Dx3d12Ptr,
 };
 
 const win32 = if (builtin.os.tag == .windows) struct {
@@ -233,7 +257,7 @@ pub const App = struct {
         errdefer glfw.glfwTerminate();
 
         switch (options.backend) {
-            .vulkan => {
+            .vulkan, .dx3d11, .dx3d12 => {
                 glfw.glfwWindowHint(glfw.CLIENT_API, glfw.NO_API);
             },
             .opengl => {
@@ -262,25 +286,24 @@ pub const App = struct {
         ) orelse return error.WindowCreationFailed;
         errdefer glfw.glfwDestroyWindow(window);
 
-        const backend: Backend = switch (options.backend) {
-            .vulkan => .{
-                .vulkan = try createVulkan(
-                    allocator,
-                    options,
-                ),
-            },
-            .opengl => .{
-                .opengl = try createOpenGl(allocator, window),
-            },
-        };
-        errdefer switch (backend) {
-            .vulkan => |value| value.deinit(),
-            .opengl => |value| value.deinit(),
-        };
+        const backend = try createBackend(
+            allocator,
+            options,
+            window,
+        );
+        errdefer deinitBackend(backend);
 
         const device: rhi.Device = switch (backend) {
             .vulkan => |value| value.asDevice(),
             .opengl => |value| value.asDevice(),
+            .dx3d11 => |value| if (dx3d11_available)
+                value.asDevice()
+            else
+                unreachable,
+            .dx3d12 => |value| if (dx3d12_available)
+                value.asDevice()
+            else
+                unreachable,
         };
         const queue = try device.getQueue(0);
 
@@ -312,8 +335,8 @@ pub const App = struct {
         errdefer command_buffer.destroy();
 
         const sync: ?VulkanSync = switch (options.backend) {
-            .vulkan => try VulkanSync.create(device),
-            .opengl => null,
+            .vulkan, .dx3d12 => try VulkanSync.create(device),
+            .opengl, .dx3d11 => null,
         };
         errdefer if (sync) |value| value.destroy();
 
@@ -357,10 +380,7 @@ pub const App = struct {
         self.allocator.free(self.images);
         self.swapchain.destroy();
         self.surface.destroy();
-        switch (self.backend) {
-            .vulkan => |value| value.deinit(),
-            .opengl => |value| value.deinit(),
-        }
+        deinitBackend(self.backend);
         glfw.glfwDestroyWindow(self.window);
         glfw.glfwTerminate();
     }
@@ -404,7 +424,7 @@ pub const App = struct {
     /// - Errors reported by `Swapchain.acquire`.
     pub fn acquire(self: *App) !?Frame {
         switch (self.backend) {
-            .vulkan => {
+            .vulkan, .dx3d12 => {
                 const sync = self.sync.?;
                 try sync.in_flight.wait(std.math.maxInt(u64));
                 const acquired = self.swapchain.acquire(
@@ -422,7 +442,7 @@ pub const App = struct {
                     .view = self.views[acquired.image_index],
                 };
             },
-            .opengl => {
+            .opengl, .dx3d11 => {
                 const acquired = self.swapchain.acquire(
                     self.queue,
                     null,
@@ -510,7 +530,7 @@ pub const App = struct {
     /// - Errors reported by submission or presentation.
     pub fn endFrame(self: *App, frame: Frame) !void {
         switch (self.backend) {
-            .vulkan => {
+            .vulkan, .dx3d12 => {
                 const sync = self.sync.?;
                 try self.command_buffer.submit(self.queue, .{
                     .wait_semaphores = &.{
@@ -529,13 +549,15 @@ pub const App = struct {
                     },
                 });
             },
-            .opengl => {
+            .opengl, .dx3d11 => {
                 try self.command_buffer.submit(self.queue, .{});
                 try self.swapchain.present(.{
                     .queue = self.queue,
                     .image_index = frame.image_index,
                 });
-                glfw.glfwSwapBuffers(self.window);
+                if (self.kind == .opengl) {
+                    glfw.glfwSwapBuffers(self.window);
+                }
             },
         }
     }
@@ -556,6 +578,34 @@ pub const App = struct {
         });
     }
 };
+
+fn createBackend(
+    allocator: Allocator,
+    options: Options,
+    window: *glfw.Window,
+) !Backend {
+    return switch (options.backend) {
+        .vulkan => .{ .vulkan = try createVulkan(allocator, options) },
+        .opengl => .{ .opengl = try createOpenGl(allocator, window) },
+        .dx3d11 => if (dx3d11_available)
+            .{ .dx3d11 = try rhi.Dx3d11.init(allocator, .{}) }
+        else
+            error.UnsupportedBackend,
+        .dx3d12 => if (dx3d12_available)
+            .{ .dx3d12 = try rhi.Dx3d12.init(allocator, .{}) }
+        else
+            error.UnsupportedBackend,
+    };
+}
+
+fn deinitBackend(backend: Backend) void {
+    switch (backend) {
+        .vulkan => |value| value.deinit(),
+        .opengl => |value| value.deinit(),
+        .dx3d11 => |value| if (dx3d11_available) value.deinit(),
+        .dx3d12 => |value| if (dx3d12_available) value.deinit(),
+    }
+}
 
 fn createVulkan(
     allocator: Allocator,
@@ -600,6 +650,14 @@ fn surfaceDescription(
     window: *glfw.Window,
     options: Options,
 ) !rhi.types.SurfaceDescription {
+    if (options.backend == .dx3d11 or
+        options.backend == .dx3d12)
+    {
+        if (builtin.os.tag != .windows) {
+            return error.UnsupportedSurface;
+        }
+        return win32Surface(window, options);
+    }
     if (options.backend == .opengl) {
         return .{ .native = .{ .headless = .{
             .width = options.width,
@@ -607,14 +665,7 @@ fn surfaceDescription(
         } } };
     }
     if (builtin.os.tag == .windows) {
-        const hwnd = glfw.glfwGetWin32Window(window) orelse
-            return error.WindowHandleUnavailable;
-        const hinstance = win32.GetModuleHandleW(null) orelse
-            return error.ModuleHandleUnavailable;
-        return .{ .native = .{ .win32 = .{
-            .hinstance = @intFromPtr(hinstance),
-            .hwnd = @intFromPtr(hwnd),
-        } } };
+        return win32Surface(window, options);
     }
     if (builtin.os.tag == .linux) {
         if (glfw.glfwGetX11Display()) |display| {
@@ -637,6 +688,22 @@ fn surfaceDescription(
         return error.UnsupportedSurface;
     }
     return error.UnsupportedSurface;
+}
+
+fn win32Surface(
+    window: *glfw.Window,
+    options: Options,
+) !rhi.types.SurfaceDescription {
+    _ = options;
+    if (builtin.os.tag != .windows) return error.UnsupportedSurface;
+    const hwnd = glfw.glfwGetWin32Window(window) orelse
+        return error.WindowHandleUnavailable;
+    const hinstance = win32.GetModuleHandleW(null) orelse
+        return error.ModuleHandleUnavailable;
+    return .{ .native = .{ .win32 = .{
+        .hinstance = @intFromPtr(hinstance),
+        .hwnd = @intFromPtr(hwnd),
+    } } };
 }
 
 /// Creates an RHI shader from embedded SPIR-V bytes.

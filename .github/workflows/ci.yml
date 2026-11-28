@@ -45,7 +45,7 @@ jobs:
         run: zig version
 
       - name: Build project
-        run: zig build -Dvulkan=false -Doptimize=${{ matrix.optimize }} --summary all
+        run: zig build -Ddisable-render -Doptimize=${{ matrix.optimize }} --summary all
 
       - name: Run test
-        run: zig build test -Dvulkan=false -Doptimize=${{ matrix.optimize }} --summary all
+        run: zig build test -Ddisable-render -Doptimize=${{ matrix.optimize }} --summary all

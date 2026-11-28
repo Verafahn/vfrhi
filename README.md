@@ -515,25 +515,37 @@ zig build test -Ddisable-render=true # only build the test backend
 
 Every directory under `examples/` is an independent Zig project with its
 own `build.zig` and `build.zig.zon`. The manifest pulls in vfrhi from this
-repository, so the examples stay in sync with the interface.
+repository, so the examples stay in sync with the interface. Examples are
+not part of the package distribution; their run steps are only added when
+vfrhi is the root project.
 
-| Example | Demonstrates |
-| --- | --- |
-| `examples/clear` | Window creation and clearing a render pass |
-| `examples/triangle` | Vertex buffer, shaders, and a graphics pipeline |
-| `examples/quad` | Element buffer with `drawIndexed` |
-| `examples/batch` | Thousands of triangles in a single draw call |
-| `examples/texture` | Texture upload, sampler, and descriptor set |
+| Example | Run step | Demonstrates |
+| --- | --- | --- |
+| `examples/clear` | `zig build run-clear` | Window creation and clearing a render pass |
+| `examples/triangle` | `zig build run-triangle` | Vertex buffer, shaders, and a graphics pipeline |
+| `examples/quad` | `zig build run-quad` | Element buffer with `drawIndexed` |
+| `examples/batch` | `zig build run-batch` | Thousands of triangles in a single draw call |
+| `examples/texture` | `zig build run-texture` | Texture upload, sampler, and descriptor set |
 
-Run an example from its own directory and select the backend on the
-command line:
+Each step changes into the example directory and runs `zig build run`
+there. Arguments after the outer `--` are forwarded to that build, so
+build options go before a second `--` and program arguments go after it:
+
+```sh
+zig build run-triangle -- -Doptimize=ReleaseFast -- --backend vulkan --frames 2
+```
+
+Without build options, keep the empty argument group:
+
+```sh
+zig build run-triangle -- -- --backend opengl --frames 2
+```
+
+Running from the example directory is equivalent:
 
 ```sh
 cd examples/triangle
 zig build run -- --backend vulkan --frames 2
-zig build run -- --backend opengl --frames 2
-zig build run -- --backend dx3d11 --frames 2
-zig build run -- --backend dx3d12 --frames 2
 ```
 
 `--frames 0` keeps the window open until it is closed. Shaders live in

@@ -54,7 +54,7 @@ pub const CommandLine = struct {
     /// Selected backend.
     backend: BackendKind = .vulkan,
     /// Number of frames to render, or zero for unlimited.
-    max_frames: u32 = 240,
+    max_frames: u32 = 0,
     /// Whether `--help` was requested.
     help: bool = false,
 };

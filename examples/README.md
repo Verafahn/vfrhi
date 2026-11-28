@@ -13,7 +13,24 @@ creation:
 
 The Vulkan, OpenGL, and (on Windows) Direct3D 11 and 12 backends are
 enabled at build time, and the example picks one at run time with
-`--backend`:
+`--backend`.
+
+From the repository root, each example has a `run-<name>` step:
+
+```sh
+zig build run-triangle
+```
+
+The step changes into the example directory and runs `zig build run`
+there. Arguments after the outer `--` are forwarded to that build, so a
+second `--` separates build options from program arguments:
+
+```sh
+zig build run-triangle -- -- --backend vulkan --frames 2
+zig build run-triangle -- -Doptimize=ReleaseFast -- --backend opengl
+```
+
+Running from the example directory is equivalent:
 
 ```sh
 cd triangle

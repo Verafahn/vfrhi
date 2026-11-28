@@ -17,6 +17,7 @@ pub fn build(b: *Build) !void {
     const rhi = createRhiModule(b, target, optimize, config);
     try configureBackends(b, rhi, target, optimize, config);
     addTestStep(b, rhi, target, config);
+    addExampleSteps(b);
 }
 
 fn readConfig(b: *Build, target: Build.ResolvedTarget) Config {
@@ -141,6 +142,39 @@ fn addOpenGlBackend(
         .optimize = optimize,
     });
     rhi.addImport("glad", vfglad.module("glad"));
+}
+
+fn addExampleSteps(b: *Build) void {
+    // Examples are not part of the distributed package, so their run
+    // steps only exist when this project is the root package.
+    if (!b.isRoot()) return;
+
+    const examples = [_]struct {
+        name: []const u8,
+        description: []const u8,
+    }{
+        .{ .name = "clear", .description = "Run the clear example." },
+        .{ .name = "triangle", .description = "Run the triangle example." },
+        .{ .name = "quad", .description = "Run the quad example." },
+        .{ .name = "batch", .description = "Run the batch example." },
+        .{ .name = "texture", .description = "Run the texture example." },
+    };
+
+    for (examples) |example| {
+        const run = b.addSystemCommand(&.{
+            b.graph.zig_exe,
+            "build",
+            "run",
+        });
+        run.setCwd(b.path(b.fmt("examples/{s}", .{example.name})));
+        run.addPassthruArgs();
+
+        const step = b.step(
+            b.fmt("run-{s}", .{example.name}),
+            example.description,
+        );
+        step.dependOn(&run.step);
+    }
 }
 
 fn addTestStep(

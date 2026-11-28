@@ -3,11 +3,129 @@ const rhi = @import("rhi");
 const testing = std.testing;
 const test_log_level: std.log.Level = .err;
 
+const opengl_vertex_block_spirv = [_]u32{
+    0x07230203, 0x00010000, 0,          20,         0,
+    0x00020011, 1,          0x0003000e, 0,          1,
+    0x0007000f, 0,          13,         0x6e69616d, 0,
+    12,         10,         0x00030047, 7,          2,
+    0x00050048, 7,          0,          11,         0,
+    0x00040047, 12,         30,         0,          0x00020013,
+    1,          0x00030021, 2,          1,          0x00030016,
+    3,          32,         0x00040017, 4,          3,
+    3,          0x00040017, 5,          3,          4,
+    0x00040015, 6,          32,         0,          0x0003001e,
+    7,          5,          0x00040020, 8,          3,
+    7,          0x00040020, 9,          3,          5,
+    0x00040020, 11,         1,          4,          0x0004002b,
+    6,          15,         0,          0x0004002b, 3,
+    17,         0x3f800000, 0x0004003b, 8,          10,
+    3,          0x0004003b, 11,         12,         1,
+    0x00050036, 1,          13,         0,          2,
+    0x000200f8, 14,         0x00050041, 9,          19,
+    10,         15,         0x0004003d, 4,          16,
+    12,         0x00050050, 5,          18,         16,
+    17,         0x0003003e, 19,         18,         0x000100fd,
+    0x00010038,
+};
+
+const opengl_ubo_fragment_spirv = [_]u32{
+    0x07230203, 0x00010000, 0,          17,         0,
+    0x00020011, 1,          0x0003000e, 0,          1,
+    0x0006000f, 4,          12,         0x6e69616d, 0,
+    11,         0x00030047, 6,          2,          0x00050048,
+    6,          0,          35,         0,          0x00040047,
+    10,         34,         0,          0x00040047, 10,
+    33,         0,          0x00040047, 11,         30,
+    0,          0x00020013, 1,          0x00030021, 2,
+    1,          0x00030016, 3,          32,         0x00040017,
+    4,          3,          4,          0x00040015, 5,
+    32,         0,          0x0003001e, 6,          4,
+    0x00040020, 7,          2,          6,          0x00040020,
+    8,          2,          4,          0x00040020, 9,
+    3,          4,          0x0004002b, 5,          14,
+    0,          0x0004003b, 7,          10,         2,
+    0x0004003b, 9,          11,         3,          0x00050036,
+    1,          12,         0,          2,          0x000200f8,
+    13,         0x00050041, 8,          15,         10,
+    14,         0x0004003d, 4,          16,         15,
+    0x0003003e, 11,         16,         0x000100fd, 0x00010038,
+};
+
+const opengl_texture_fragment_spirv = [_]u32{
+    0x07230203, 0x00010000, 0,          27,         0,
+    0x00020011, 1,          0x0003000e, 0,          1,
+    0x0006000f, 4,          17,         0x6e69616d, 0,
+    16,         0x00030047, 7,          2,          0x00050048,
+    7,          0,          35,         0,          0x00040047,
+    14,         34,         0,          0x00040047, 14,
+    33,         0,          0x00040047, 15,         34,
+    0,          0x00040047, 15,         33,         1,
+    0x00040047, 16,         30,         0,          0x00020013,
+    1,          0x00030021, 2,          1,          0x00030016,
+    3,          32,         0x00040017, 4,          3,
+    2,          0x00040017, 5,          3,          4,
+    0x00040015, 6,          32,         0,          0x0003001e,
+    7,          5,          0x00040020, 8,          2,
+    7,          0x00040020, 9,          2,          5,
+    0x00040020, 10,         3,          5,          0x00090019,
+    11,         3,          1,          0,          0,
+    0,          1,          0,          0x0003001b, 12,
+    11,         0x00040020, 13,         0,          12,
+    0x0004002b, 6,          19,         0,          0x0004002b,
+    3,          20,         0x3e800000, 0x0005002c, 4,
+    21,         20,         20,         0x0004003b, 8,
+    14,         2,          0x0004003b, 13,         15,
+    0,          0x0004003b, 10,         16,         3,
+    0x00050036, 1,          17,         0,          2,
+    0x000200f8, 18,         0x00050041, 9,          22,
+    14,         19,         0x0004003d, 5,          23,
+    22,         0x0004003d, 12,         24,         15,
+    0x00050057, 5,          25,         24,         21,
+    0x00050085, 5,          26,         23,         25,
+    0x0003003e, 16,         26,         0x000100fd, 0x00010038,
+};
+
 fn createHeadlessSurface(device: rhi.Device) !rhi.Surface {
     return rhi.Surface.create(device, .{
         .native = .{ .headless = .{ .width = 800, .height = 600 } },
     });
 }
+
+const opengl_vertex_spirv = [_]u32{
+    0x07230203, 0x00010000, 0,          16,         0,
+    0x00020011, 1,          0x0003000e, 0,          1,
+    0x0006000f, 0,          10,         0x6e69616d, 0,
+    8,          0x00040047, 8,          30,         0,
+    0x00040047, 9,          11,         0,          0x00020013,
+    1,          0x00030021, 2,          1,          0x00030016,
+    3,          32,         0x00040017, 4,          3,
+    3,          0x00040017, 5,          3,          4,
+    0x00040020, 6,          1,          4,          0x00040020,
+    7,          3,          5,          0x0004002b, 3,
+    15,         0x3f800000, 0x0004003b, 6,          8,
+    1,          0x0004003b, 7,          9,          3,
+    0x00050036, 1,          10,         0,          2,
+    0x000200f8, 11,         0x0004003d, 4,          12,
+    8,          0x00050050, 5,          14,         12,
+    15,         0x0003003e, 9,          14,         0x000100fd,
+    0x00010038,
+};
+
+const opengl_fragment_spirv = [_]u32{
+    0x07230203, 0x00010000, 0,          11,         0,
+    0x00020011, 1,          0x0003000e, 0,          1,
+    0x0006000f, 4,          7,          0x6e69616d, 0,
+    6,          0x00040047, 6,          30,         0,
+    0x00020013, 1,          0x00030021, 2,          1,
+    0x00030016, 3,          32,         0x00040017, 4,
+    3,          4,          0x00040020, 5,          3,
+    4,          0x0004002b, 3,          9,          0x3f800000,
+    0x0004003b, 5,          6,          3,          0x00050036,
+    1,          7,          0,          2,          0x000200f8,
+    8,          0x00070050, 4,          10,         9,
+    9,          9,          9,          0x0003003e, 6,
+    10,         0x000100fd, 0x00010038,
+};
 
 test "test backend starts and stops" {
     testing.log_level = test_log_level;
@@ -781,4 +899,116 @@ test "vulkan backend compiles when enabled" {
         _ = Vulkan.asDevice;
         std.testing.refAllDecls(Vulkan);
     }
+}
+
+test "opengl backend compiles when enabled" {
+    testing.log_level = test_log_level;
+    if (rhi.opengl_enabled) {
+        const OpenGL = rhi.OpenGL;
+        _ = OpenGL.init;
+        _ = OpenGL.deinit;
+        _ = OpenGL.asDevice;
+        std.testing.refAllDecls(OpenGL);
+    }
+}
+
+test "opengl translator emits GLSL" {
+    testing.log_level = test_log_level;
+    if (!rhi.opengl_enabled) return;
+    const spirv = @import("backend/opengl/spirv.zig");
+
+    const vertex = try spirv.translate(
+        testing.allocator,
+        &opengl_vertex_spirv,
+        .vertex,
+        "main",
+    );
+    defer vertex.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        vertex.source,
+        "layout(location = 0) in vec3",
+    ) != null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        vertex.source,
+        "gl_Position",
+    ) != null);
+
+    const vertex_block = try spirv.translate(
+        testing.allocator,
+        &opengl_vertex_block_spirv,
+        .vertex,
+        "main",
+    );
+    defer vertex_block.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        vertex_block.source,
+        "layout(location = 0) in vec3",
+    ) != null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        vertex_block.source,
+        "gl_Position = vfrhi_v_18",
+    ) != null);
+
+    const fragment = try spirv.translate(
+        testing.allocator,
+        &opengl_fragment_spirv,
+        .fragment,
+        "main",
+    );
+    defer fragment.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        fragment.source,
+        "layout(location = 0) out vec4",
+    ) != null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        fragment.source,
+        "vec4(1.0, 1.0, 1.0, 1.0)",
+    ) != null);
+
+    const ubo = try spirv.translate(
+        testing.allocator,
+        &opengl_ubo_fragment_spirv,
+        .fragment,
+        "main",
+    );
+    defer ubo.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        ubo.source,
+        "layout(std140) uniform vfrhi_set_0_binding_0",
+    ) != null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        ubo.source,
+        "layout(offset = 0) vec4 m0;",
+    ) != null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        ubo.source,
+        "vfrhi_var_10.m0",
+    ) != null);
+
+    const textured = try spirv.translate(
+        testing.allocator,
+        &opengl_texture_fragment_spirv,
+        .fragment,
+        "main",
+    );
+    defer textured.deinit();
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured.source,
+        "uniform sampler2D vfrhi_set_0_binding_1;",
+    ) != null);
+    try testing.expect(std.mem.indexOf(
+        u8,
+        textured.source,
+        "texture(vfrhi_set_0_binding_1, vec2(0.25, 0.25))",
+    ) != null);
 }
